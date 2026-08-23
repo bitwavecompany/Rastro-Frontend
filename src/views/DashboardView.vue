@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboard } from '@/composables/useDashboard'
 import { formatAmount, formatDate, getAccountIcon, getAccountColorClass } from '@/utils/formatters'
@@ -12,21 +13,37 @@ const {
   currentMonthBalance,
   recentTransactions,
   monthLabel,
+  getAccountBalance
 } = useDashboard()
+
+const translatedMonthLabel = computed(() => {
+  const months: Record<string, string> = {
+    'January': 'enero', 'February': 'febrero', 'March': 'marzo', 'April': 'abril',
+    'May': 'mayo', 'June': 'junio', 'July': 'julio', 'August': 'agosto',
+    'September': 'septiembre', 'October': 'octubre', 'November': 'noviembre', 'December': 'diciembre'
+  }
+  return monthLabel.value.replace(/[a-zA-Z]+/, match => months[match] || match)
+})
 </script>
 
 <template>
   <div class="min-h-full bg-gray-50 px-6 py-8">
-    <div class="space-y-6">
+    <div class="space-y-3">
 
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Inicio</h1>
-        <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ monthLabel }}</p>
+      <div class="flex items-center justify-between gap-4 mb-2">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Inicio</h1>
+          <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ translatedMonthLabel }}</p>
+        </div>
+        <div class="flex items-center justify-center shrink-0">
+          <img src="/imagotipo-blanco-big.jpg" alt="Rastro" class="h-10 w-auto object-contain" />
+        </div>
       </div>
 
       <div class="bg-gray-900 rounded-3xl p-6 shadow-lg text-white relative overflow-hidden">
         <div class="absolute -right-6 -top-6 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
         <div class="absolute right-12 -bottom-10 w-24 h-24 bg-primary/20 rounded-full blur-xl pointer-events-none"></div>
+
         <div class="relative z-10">
           <p class="text-sm font-medium text-gray-400">Patrimonio total</p>
           <p class="text-4xl font-bold tracking-tight mt-1">{{ formatAmount(totalPatrimony) }}</p>
@@ -98,7 +115,7 @@ const {
               <p class="text-sm font-medium text-gray-800 truncate">{{ account.name }}</p>
               <p class="text-xs text-gray-400">{{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}</p>
             </div>
-            <p class="text-sm font-semibold text-gray-900 shrink-0">{{ formatAmount(account.amount) }}</p>
+            <p class="text-sm font-semibold text-gray-900 shrink-0">{{ formatAmount(getAccountBalance(account.id, account.amount)) }}</p>
           </div>
         </div>
       </div>

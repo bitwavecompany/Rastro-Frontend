@@ -20,6 +20,13 @@ const initials = computed(() => {
     .join('')
 })
 
+const roleBadge = computed(() => {
+  const token = profileStore.profile.roleToken
+  if (token === 'cHJlbWl1bV91bmxvY2tlZF8yMDI2') return { label: 'PRO', classes: 'bg-amber-100 text-amber-700' }
+  if (token === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2') return { label: 'FREE', classes: 'bg-primary/10 text-primary' }
+  return { label: 'GUEST', classes: 'bg-gray-100 text-gray-600' }
+})
+
 const navItems = [
   { name: 'Inicio',    to: '/',         icon: 'lucide:house' },
   { name: 'Gastos',    to: '/expenses', icon: 'lucide:receipt' },
@@ -48,13 +55,15 @@ function navigate(to: string) {
         class="flex items-center border-b border-gray-100 shrink-0 h-14"
         :class="collapsed ? 'justify-center px-0' : 'justify-between px-4'"
       >
-        <span v-if="!collapsed" class="text-base font-bold text-gray-900 tracking-tight">Rastro</span>
+        <div v-if="!collapsed" class="flex-1 flex justify-center">
+            <img src="/sololetras-blanco.jpg" alt="Rastro" class="h-6 w-auto" />
+        </div>
         <button
           @click="collapsed = !collapsed"
-          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
           :title="collapsed ? 'Expandir' : 'Colapsar'"
         >
-          <Icon :icon="collapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" class="w-4 h-4" />
+          <Icon :icon="collapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" class="w-5 h-5" />
         </button>
       </div>
 
@@ -72,7 +81,7 @@ function navigate(to: string) {
           ]"
           :title="collapsed ? item.name : ''"
         >
-          <Icon :icon="item.icon" class="w-4 h-4 shrink-0" />
+          <Icon :icon="item.icon" class="w-5 h-5 shrink-0" />
           <span v-if="!collapsed" class="truncate">{{ item.name }}</span>
         </button>
       </nav>
@@ -90,16 +99,22 @@ function navigate(to: string) {
           :title="collapsed ? (profileStore.profile.name || 'Perfil') : ''"
         >
           <div
-            class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
+            class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold"
             :class="isActive('/profile') ? 'bg-white/20 text-white' : 'bg-primary text-white'"
           >
             {{ initials }}
           </div>
           <template v-if="!collapsed">
-            <span class="truncate flex-1 text-left">
-              {{ profileStore.profile.name || 'Mi perfil' }}
-            </span>
-            <Icon icon="lucide:chevron-right" class="w-3.5 h-3.5 shrink-0 opacity-40" />
+            <div class="flex-1 flex flex-col items-start min-w-0">
+              <span class="truncate w-full text-left">{{ profileStore.profile.name || 'Mi perfil' }}</span>
+              <span 
+                class="mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
+                :class="roleBadge.classes"
+              >
+                {{ roleBadge.label }}
+              </span>
+            </div>
+            <Icon icon="lucide:chevron-right" class="w-4 h-4 shrink-0 opacity-40" />
           </template>
         </button>
       </div>
@@ -108,13 +123,16 @@ function navigate(to: string) {
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       <header class="md:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-gray-100 shrink-0">
-        <span class="text-base font-bold text-gray-900">Rastro</span>
-        <button
-          @click="navigate('/profile')"
-          class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white text-xs font-bold"
-        >
-          {{ initials }}
-        </button>
+        <div class="w-12"></div>
+        <img src="/sololetras-blanco.jpg" alt="Rastro" class="h-6 w-auto" />
+        <div class="w-12 flex justify-end">
+          <span 
+            class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
+            :class="roleBadge.classes"
+          >
+            {{ roleBadge.label }}
+          </span>
+        </div>
       </header>
 
       <main class="flex-1 overflow-y-auto pb-16 md:pb-0">
@@ -131,7 +149,7 @@ function navigate(to: string) {
         class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors relative"
         :class="isActive(item.to) ? 'text-gray-900' : 'text-gray-400'"
       >
-        <Icon :icon="item.icon" class="w-5 h-5" />
+        <Icon :icon="item.icon" class="w-6 h-6" />
         {{ item.name }}
         <span v-if="isActive(item.to)" class="absolute bottom-1.5 w-1 h-1 rounded-full bg-gray-900" />
       </button>
@@ -142,7 +160,7 @@ function navigate(to: string) {
         :class="isActive('/profile') ? 'text-gray-900' : 'text-gray-400'"
       >
         <div
-          class="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold"
+          class="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
           :class="isActive('/profile') ? 'bg-gray-900' : 'bg-primary'"
         >
           {{ initials }}

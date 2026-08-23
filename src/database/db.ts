@@ -10,10 +10,30 @@ export class RastroDatabase extends Dexie {
 
   constructor() {
     super('RastroLocalDB')
+    
     this.version(1).stores({
       accounts: 'id, type',
       transactions: 'id, kind, accountId, createdAt',
       profile: 'id'
+    })
+    
+    this.version(2).stores({
+      accounts: 'id, type',
+      transactions: 'id, kind, accountId, createdAt',
+      profile: 'id'
+    }).upgrade(tx => {
+      return tx.table('profile').toCollection().modify(profile => {
+        if (profile.role) {
+          if (profile.role === 'premium') {
+            profile.roleToken = 'cHJlbWl1bV91bmxvY2tlZF8yMDI2'
+          } else if (profile.role === 'registered') {
+            profile.roleToken = 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2'
+          } else {
+            profile.roleToken = 'Z3Vlc3RfbGV2ZWxfMjAyNg=='
+          }
+          delete profile.role
+        }
+      })
     })
   }
 }

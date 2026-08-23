@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useToastStore } from '@/stores/useToastStore'
+import { useProfileStore } from '@/stores/useProfileStore'
 import type { Account, AccountType, CreateAccountPayload } from '@/types/account'
 
 export type AccountFormData = {
@@ -19,21 +20,34 @@ function emptyForm(): AccountFormData {
 export function useAccountForm() {
   const store = useAccountsStore()
   const toast = useToastStore()
+  const profileStore = useProfileStore()
 
   const form   = reactive<AccountFormData>(emptyForm())
   const errors = reactive<AccountFormErrors>({})
   const isOpen = ref(false)
 
   function open(account?: Account) {
-    if (account) {
+    if (!account) {
+      const roleToken = profileStore.profile.roleToken
+      const maxAccounts = roleToken === 'Z3Vlc3RfbGV2ZWxfMjAyNg==' ? 2 : (roleToken === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2' ? 3 : Infinity)
+
+      if (store.accounts.length >= maxAccounts) {
+        if (roleToken === 'Z3Vlc3RfbGV2ZWxfMjAyNg==') {
+          toast.warning('Límite de cuentas excedido. Por favor, inicia sesión para crear más.', 4500)
+        } else if (roleToken === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2') {
+          toast.warning('Límite de cuentas excedido. Mejora a Premium para cuentas ilimitadas.', 4500)
+        }
+        return
+      }
+      
+      Object.assign(form, emptyForm())
+    } else {
       Object.assign(form, {
         name:        account.name,
         type:        account.type,
         amount:      account.amount,
         description: account.description ?? '',
       })
-    } else {
-      Object.assign(form, emptyForm())
     }
     delete errors.name
     delete errors.amount

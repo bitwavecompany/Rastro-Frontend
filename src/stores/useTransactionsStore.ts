@@ -60,5 +60,17 @@ export const useTransactionsStore = defineStore('transactions', () => {
     )
   }
 
-  return { transactions, expenses, incomes, isLoaded, add, update, remove, byAccount, load }
+  function getAccountBalance(accountId: number, initialAmount: number): number {
+    const accountTransactions = byAccount(accountId)
+    const totalIncomes = accountTransactions
+      .filter(t => t.kind === 'income' && !t.deletedAt)
+      .reduce((sum, t) => sum + t.amount, 0)
+    const totalExpenses = accountTransactions
+      .filter(t => t.kind === 'expense' && !t.deletedAt)
+      .reduce((sum, t) => sum + t.amount, 0)
+    
+    return initialAmount + totalIncomes - totalExpenses
+  }
+
+  return { transactions, expenses, incomes, isLoaded, add, update, remove, byAccount, getAccountBalance, load }
 })

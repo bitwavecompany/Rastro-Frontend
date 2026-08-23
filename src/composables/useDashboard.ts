@@ -8,7 +8,7 @@ export function useDashboard() {
   const transactionsStore = useTransactionsStore()
 
   const totalPatrimony = computed(() =>
-    accountsStore.accounts.reduce((sum, a) => sum + a.amount, 0)
+    accountsStore.accounts.reduce((sum, a) => sum + transactionsStore.getAccountBalance(a.id, a.amount), 0)
   )
 
   const currentMonthExpenses = computed(() => {
@@ -47,5 +47,6 @@ export function useDashboard() {
     currentMonthBalance,
     recentTransactions,
     monthLabel,
+    getAccountBalance: transactionsStore.getAccountBalance,
   }
 }

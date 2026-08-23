@@ -123,7 +123,7 @@ async function handleDeleteMovementConfirm(reason?: string) {
           Editar
         </button>
         <button
-          v-if="account.type !== 'cash'"
+          v-if="account.id !== 1"
           @click="deleteAccount.request(account)"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-danger/20
                  text-xs font-medium text-danger/80 hover:bg-danger/10 transition-colors"
@@ -236,7 +236,7 @@ async function handleDeleteMovementConfirm(reason?: string) {
     @cancel="accountForm.close()"
     @update:open="val => !val && accountForm.close()"
   >
-    <AccountFormFields :form="accountForm.form" :errors="accountForm.errors" />
+    <AccountFormFields :form="accountForm.form" :errors="accountForm.errors" :is-default-account="account?.id === 1" />
   </AppFormDialog>
 
   <AppFormDialog

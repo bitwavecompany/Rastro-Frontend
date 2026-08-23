@@ -1,16 +1,30 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Transaction } from '@/types/transaction'
 import { formatAmount, formatDate } from '@/utils/formatters'
+import { useAccountsStore } from '@/stores/useAccountsStore'
 
-const props = defineProps<{
-  item: Transaction
-  editHoverClass?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    item: Transaction
+    editHoverClass?: string
+    showAccount?: boolean
+  }>(),
+  { showAccount: false }
+)
 
 const emit = defineEmits<{
   edit: [item: Transaction]
   delete: [item: Transaction]
+  select: [item: Transaction]
 }>()
+
+const accountsStore = useAccountsStore()
+
+const accountName = computed(() => {
+  const account = accountsStore.accounts.find(a => a.id === props.item.accountId)
+  return account ? account.name : 'Desconocida'
+})
 
 const kindIcon = props.item.kind === 'income' ? 'lucide:trending-up' : 'lucide:receipt'
 const kindColorIcon = props.item.kind === 'income' ? 'text-income' : 'text-danger/80'
@@ -21,7 +35,8 @@ const amountPrefix = props.item.kind === 'income' ? '+' : '-'
 
 <template>
   <div
-    class="px-4 py-3 flex items-start gap-3 transition-colors md:hidden"
+    @click="emit('select', item)"
+    class="px-4 py-3 flex items-start gap-3 transition-colors md:hidden cursor-pointer active:bg-gray-100"
     :class="item.deletedAt ? 'opacity-75 bg-gray-50/50' : 'hover:bg-gray-50/60'"
   >
     <div
@@ -33,35 +48,20 @@ const amountPrefix = props.item.kind === 'income' ? '+' : '-'
 
     <div class="flex-1 min-w-0" :class="{ 'line-through': item.deletedAt }">
       <p class="text-sm font-medium text-gray-800 truncate">{{ item.reason }}</p>
-      <p v-if="item.description" class="text-xs text-gray-400 truncate mt-0.5">{{ item.description }}</p>
-      <p class="text-xs text-gray-400 mt-0.5">{{ formatDate(item.createdAt) }}</p>
+      <p class="text-xs text-gray-400 mt-0.5 truncate">
+        <span v-if="showAccount" class="font-medium text-gray-500">{{ accountName }} &middot; </span>
+        {{ formatDate(item.createdAt) }}
+      </p>
     </div>
 
     <div class="shrink-0 flex items-center gap-0.5">
       <p
-        class="text-sm font-semibold mr-2"
+        class="text-sm font-semibold"
         :class="[kindColorText, { 'line-through': item.deletedAt }]"
       >
         {{ amountPrefix }}{{ formatAmount(item.amount) }}
       </p>
-      <template v-if="!item.deletedAt">
-        <button
-          @click="emit('edit', item)"
-          class="p-1.5 rounded-md text-gray-400 transition-colors"
-          :class="editHoverClass ?? 'hover:text-primary hover:bg-primary/10'"
-          title="Editar"
-        >
-          <Icon icon="lucide:pencil" class="w-4 h-4" />
-        </button>
-        <button
-          @click="emit('delete', item)"
-          class="p-1.5 rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors"
-          title="Eliminar"
-        >
-          <Icon icon="lucide:trash-2" class="w-4 h-4" />
-        </button>
-      </template>
-      <span v-else class="text-[10px] font-bold text-danger/70 uppercase tracking-wider px-1">Anulado</span>
+      <span v-if="item.deletedAt" class="text-[10px] font-bold text-danger/70 uppercase tracking-wider px-1 ml-1">Anulado</span>
     </div>
   </div>
 
@@ -81,6 +81,9 @@ const amountPrefix = props.item.kind === 'income' ? '+' : '-'
       <span v-if="item.description">{{ item.description }}</span>
       <span v-else class="text-gray-300">—</span>
     </td>
+    <td v-if="showAccount" class="px-6 py-4 text-gray-600 whitespace-nowrap text-xs font-medium" :class="{ 'line-through': item.deletedAt }">
+      {{ accountName }}
+    </td>
     <td class="px-6 py-4 text-gray-400 whitespace-nowrap text-xs">
       {{ formatDate(item.createdAt) }}
     </td>
@@ -94,7 +97,7 @@ const amountPrefix = props.item.kind === 'income' ? '+' : '-'
       <div class="flex items-center justify-end gap-1">
         <template v-if="!item.deletedAt">
           <button
-            @click="emit('edit', item)"
+            @click.stop="emit('edit', item)"
             class="p-1.5 rounded-md text-gray-400 transition-colors"
             :class="editHoverClass ?? 'hover:text-primary hover:bg-primary/10'"
             title="Editar"
@@ -102,7 +105,7 @@ const amountPrefix = props.item.kind === 'income' ? '+' : '-'
             <Icon icon="lucide:pencil" class="w-4 h-4" />
           </button>
           <button
-            @click="emit('delete', item)"
+            @click.stop="emit('delete', item)"
             class="p-1.5 rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors"
             title="Eliminar"
           >

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { useProfileStore } from '@/stores/useProfileStore'
 import { useToastStore } from '@/stores/useToastStore'
 import { useDeleteConfirm } from '@/composables/useDeleteConfirm'
 import TransactionForm from '@/components/transactions/TransactionForm.vue'
@@ -13,11 +14,19 @@ const props = defineProps<{
 }>()
 
 const store = useTransactionsStore()
+const profileStore = useProfileStore()
 const toast = useToastStore()
 
 const items = computed(() =>
   props.kind === 'expense' ? store.expenses : store.incomes
 )
+
+const maxRecords = computed(() => {
+  const roleToken = profileStore.profile.roleToken
+  if (roleToken === 'Z3Vlc3RfbGV2ZWxfMjAyNg==') return 25
+  if (roleToken === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2') return 50
+  return Infinity
+})
 
 const pageTitle = computed(() =>
   props.kind === 'expense' ? 'Gastos' : 'Ingresos'
@@ -47,6 +56,20 @@ const error        = ref<string | null>(null)
 const deleteConfirm = useDeleteConfirm<Transaction>()
 
 async function handleSubmit(payload: CreateTransactionPayload) {
+  if (!editingItem.value) {
+    const activeRecords = items.value.filter(t => !t.deletedAt).length
+
+    if (activeRecords >= maxRecords.value) {
+      const typeName = props.kind === 'expense' ? 'gastos' : 'ingresos'
+      if (profileStore.profile.roleToken === 'Z3Vlc3RfbGV2ZWxfMjAyNg==') {
+        toast.warning(`Has excedido el límite de ${maxRecords.value} ${typeName}. Por favor, inicia sesión.`, 5000)
+      } else if (profileStore.profile.roleToken === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2') {
+        toast.warning(`Has excedido el límite de ${maxRecords.value} ${typeName}. Mejora a Premium para registros ilimitados.`, 5000)
+      }
+      return
+    }
+  }
+
   isSubmitting.value = true
   error.value        = null
   try {

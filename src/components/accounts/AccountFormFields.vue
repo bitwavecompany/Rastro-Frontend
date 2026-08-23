@@ -4,10 +4,13 @@ import AppAmountInput from '@/components/ui/AppAmountInput.vue'
 import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
 import type { AccountType } from '@/types/account'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   form: AccountFormData
   errors: AccountFormErrors
-}>()
+  isDefaultAccount?: boolean
+}>(), {
+  isDefaultAccount: false
+})
 
 const accountTypeOptions: { value: AccountType; label: string; icon: string }[] = [
   { value: 'cash', label: 'Efectivo', icon: 'lucide:banknote' },
@@ -24,8 +27,10 @@ const accountTypeOptions: { value: AccountType; label: string; icon: string }[] 
       v-model="props.form.name"
       type="text"
       placeholder="Ej: Banco Pichincha"
+      :disabled="isDefaultAccount"
       class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-             focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
+             focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition
+             disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed"
       :class="props.errors.name ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
     />
     <p v-if="props.errors.name" class="mt-1 text-xs text-danger/80">{{ props.errors.name }}</p>
@@ -47,6 +52,7 @@ const accountTypeOptions: { value: AccountType; label: string; icon: string }[] 
     <AppTypeToggle
       v-model="props.form.type"
       :options="accountTypeOptions"
+      :disabled="isDefaultAccount"
     />
   </div>
 

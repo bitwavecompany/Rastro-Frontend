@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 withDefaults(
   defineProps<{
     open:           boolean
@@ -29,6 +28,10 @@ function handleCancel() {
   emit('cancel')
   emit('update:open', false)
 }
+
+function handleBackdropClick() {
+  emit('update:open', false)
+}
 </script>
 
 <template>
@@ -44,7 +47,7 @@ function handleCancel() {
       <div
         v-if="open"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-        @click.self="handleCancel"
+        @click.self="handleBackdropClick"
       >
         <Transition
           enter-active-class="transition duration-150 ease-out"

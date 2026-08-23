@@ -5,6 +5,7 @@ export interface Profile {
   phone?: string
   company?: string
   bio?: string
+  roleToken: string
 }
 
 export type UpdateProfilePayload = Omit<Profile, 'id'>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Account } from '@/types/account'
 import { formatAmount, getAccountIcon, getAccountColorClass } from '@/utils/formatters'
+import { useTransactionsStore } from '@/stores/useTransactionsStore'
 
 defineProps<{
   account: Account
@@ -10,6 +11,8 @@ defineEmits<{
   click: []
   delete: []
 }>()
+
+const transactionsStore = useTransactionsStore()
 </script>
 
 <template>
@@ -27,8 +30,9 @@ defineEmits<{
 
     <div class="flex-1 min-w-0">
       <p class="text-sm font-semibold text-gray-900 truncate">{{ account.name }}</p>
-      <p class="text-base font-bold text-gray-900 mt-0.5">{{ formatAmount(account.amount) }}</p>
-      <p v-if="account.description" class="text-xs text-gray-400 mt-0.5 truncate">
+      <p class="text-base font-bold text-gray-900 mt-0.5">{{ formatAmount(transactionsStore.getAccountBalance(account.id, account.amount)) }}</p>
+      <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Saldo actual</p>
+      <p v-if="account.description" class="text-xs text-gray-400 mt-1.5 truncate">
         {{ account.description }}
       </p>
       <span
@@ -41,7 +45,7 @@ defineEmits<{
 
     <div class="shrink-0 flex flex-col gap-0.5">
       <button
-        v-if="account.type !== 'cash'"
+        v-if="account.id !== 1"
         @click.stop="$emit('delete')"
         class="p-1.5 rounded-md text-gray-300 hover:text-danger/80 hover:bg-danger/10 transition-colors"
         title="Eliminar"

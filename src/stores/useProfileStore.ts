@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, toRaw } from 'vue'
 import { db } from '@/database/db'
 import type { Profile } from '@/types/profile'
 
@@ -16,6 +16,7 @@ const EMPTY_PROFILE: Omit<Profile, 'id'> = {
   phone: '',
   company: '',
   bio: '',
+  roleToken: 'Z3Vlc3RfbGV2ZWxfMjAyNg==',
 }
 
 export const useProfileStore = defineStore('profile', () => {
@@ -34,10 +35,10 @@ export const useProfileStore = defineStore('profile', () => {
       if (profiles.length > 0) {
         profile.value = profiles[0]
       } else {
-        await db.profile.add(profile.value)
+        await db.profile.add(toRaw(profile.value))
       }
     } catch (error) {
-      console.error('Error cargando perfil:', error)
+      console.error(error)
     } finally {
       isLoaded.value = true
     }
@@ -47,9 +48,9 @@ export const useProfileStore = defineStore('profile', () => {
     try {
       const updatedProfile = { ...profile.value, ...payload }
       profile.value = updatedProfile
-      await db.profile.put(updatedProfile)
+      await db.profile.put(toRaw(updatedProfile))
     } catch (error) {
-      console.error('Error guardando perfil:', error)
+      console.error(error)
     }
   }
 
@@ -60,7 +61,7 @@ export const useProfileStore = defineStore('profile', () => {
       localStorage.clear()   
       window.location.reload()
     } catch (error) {
-      console.error('Error limpiando datos:', error)
+      console.error(error)
     }
   }
 
