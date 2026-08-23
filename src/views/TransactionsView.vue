@@ -2,6 +2,7 @@
 import { ref, nextTick, computed } from 'vue'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
 import { useToastStore } from '@/stores/useToastStore'
+import { useDeleteConfirm } from '@/composables/useDeleteConfirm'
 import TransactionForm from '@/components/transactions/TransactionForm.vue'
 import TransactionList from '@/components/transactions/TransactionList.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -38,10 +39,12 @@ const deleteReasonLabel = computed(() =>
     : '¿Por qué eliminas este ingreso?'
 )
 
-const editingItem = ref<Transaction | null>(null)
-const formRef     = ref<HTMLElement | null>(null)
+const editingItem  = ref<Transaction | null>(null)
+const formRef      = ref<HTMLElement | null>(null)
 const isSubmitting = ref(false)
 const error        = ref<string | null>(null)
+
+const deleteConfirm = useDeleteConfirm<Transaction>()
 
 async function handleSubmit(payload: CreateTransactionPayload) {
   isSubmitting.value = true
@@ -55,7 +58,7 @@ async function handleSubmit(payload: CreateTransactionPayload) {
       await store.add(payload)
       toast.success(props.kind === 'expense' ? 'Gasto registrado' : 'Ingreso registrado')
     }
-  } catch (err) {
+  } catch {
     error.value = 'Error al guardar. Intenta de nuevo.'
     toast.error('Ocurrió un error al guardar')
   } finally {
@@ -74,30 +77,17 @@ function handleEditCancel() {
   editingItem.value = null
 }
 
-const showDeleteModal  = ref(false)
-const itemToDelete     = ref<Transaction | null>(null)
-
-function handleDeleteRequest(item: Transaction) {
-  itemToDelete.value  = item
-  showDeleteModal.value = true
-}
-
 async function handleDeleteConfirm(reason?: string) {
-  if (!itemToDelete.value) return
-  if (editingItem.value?.id === itemToDelete.value.id) editingItem.value = null
-  
+  if (!deleteConfirm.target.value) return
+  if (editingItem.value?.id === deleteConfirm.target.value.id) editingItem.value = null
   try {
-    await store.remove(itemToDelete.value.id, reason)
+    await store.remove(deleteConfirm.target.value.id, reason)
     toast.success(props.kind === 'expense' ? 'Gasto eliminado' : 'Ingreso eliminado')
-  } catch (err) {
+  } catch {
     toast.error('Error al eliminar el registro')
   } finally {
-    itemToDelete.value = null
+    deleteConfirm.cancel()
   }
-}
-
-function handleDeleteCancel() {
-  itemToDelete.value = null
 }
 </script>
 
@@ -132,16 +122,16 @@ function handleDeleteCancel() {
         :kind="kind"
         :items="items"
         @edit="handleEdit"
-        @delete="handleDeleteRequest"
+        @delete="deleteConfirm.request"
       />
 
     </div>
   </div>
 
   <AppModal
-    v-model:open="showDeleteModal"
+    v-model:open="deleteConfirm.isOpen.value"
     :title="deleteModalTitle"
-    :description="itemToDelete ? `¿Deseas eliminar '${itemToDelete.reason}'?` : undefined"
+    :description="deleteConfirm.target.value ? `¿Deseas eliminar '${deleteConfirm.target.value.reason}'?` : undefined"
     confirm-label="Eliminar"
     cancel-label="Cancelar"
     variant="danger"
@@ -149,6 +139,6 @@ function handleDeleteCancel() {
     :reason-label="deleteReasonLabel"
     reason-placeholder="Ej: fue un error, duplicado, ya no aplica..."
     @confirm="handleDeleteConfirm"
-    @cancel="handleDeleteCancel"
+    @cancel="deleteConfirm.cancel"
   />
 </template>

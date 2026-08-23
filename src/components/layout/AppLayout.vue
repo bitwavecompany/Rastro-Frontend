@@ -21,12 +21,14 @@ const initials = computed(() => {
 })
 
 const navItems = [
-  { name: 'Gastos', to: '/expenses', icon: 'lucide:receipt' },
-  { name: 'Ingresos', to: '/incomes', icon: 'lucide:trending-up' },
-  { name: 'Cuentas', to: '/accounts', icon: 'lucide:wallet' },
+  { name: 'Inicio',    to: '/',         icon: 'lucide:house' },
+  { name: 'Gastos',    to: '/expenses', icon: 'lucide:receipt' },
+  { name: 'Ingresos',  to: '/incomes',  icon: 'lucide:trending-up' },
+  { name: 'Cuentas',   to: '/accounts', icon: 'lucide:wallet' },
 ]
 
 function isActive(to: string) {
+  if (to === '/') return route.path === '/'
   return route.path.startsWith(to)
 }
 

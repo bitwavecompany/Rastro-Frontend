@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// src/components/transactions/TransactionForm.vue
 import { ref, watch, computed } from 'vue'
 import { useAccountsStore } from '@/stores/useAccountsStore'
+import AppAmountInput from '@/components/ui/AppAmountInput.vue'
+import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
 import type { Transaction, CreateTransactionPayload, PaymentType, TransactionKind } from '@/types/transaction'
 
 const props = withDefaults(
   defineProps<{
-    kind:             TransactionKind
-    disabled?:        boolean
-    editingItem?:     Transaction | null
+    kind:         TransactionKind
+    disabled?:    boolean
+    editingItem?: Transaction | null
   }>(),
   { disabled: false, editingItem: null }
 )
@@ -27,16 +28,20 @@ const paymentType = ref<PaymentType>('cash')
 const accountId   = ref<number>(accountsStore.accounts[0]?.id ?? 1)
 const errors      = ref<Partial<Record<'amount' | 'reason' | 'accountId', string>>>({})
 
-
-const ringClass    = computed(() => props.kind === 'expense' ? 'ring-primary/20 border-primary/50' : 'ring-income/20 border-green-300')
-const focusClass   = computed(() => props.kind === 'expense' ? 'focus:ring-primary/100' : 'focus:ring-income/100')
-const activeClass  = computed(() => props.kind === 'expense' ? 'bg-primary text-white'  : 'bg-income text-white')
-const btnClass     = computed(() => props.kind === 'expense'
+const ringClass   = computed(() => props.kind === 'expense' ? 'ring-primary/20 border-primary/50' : 'ring-income/20 border-green-300')
+const focusClass  = computed(() => props.kind === 'expense' ? 'focus:ring-primary/100' : 'focus:ring-income/100')
+const activeClass = computed(() => props.kind === 'expense' ? 'bg-primary text-white' : 'bg-income text-white')
+const btnClass    = computed(() => props.kind === 'expense'
   ? 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'
   : 'bg-income text-white hover:bg-income/90 active:bg-green-800'
 )
 
 const isEditing = computed(() => props.editingItem !== null)
+
+const paymentOptions: { value: PaymentType; label: string; icon: string }[] = [
+  { value: 'cash',     label: 'Efectivo',      icon: 'lucide:banknote' },
+  { value: 'transfer', label: 'Transferencia', icon: 'lucide:arrow-right-left' },
+]
 
 function resetForm() {
   amount.value      = ''
@@ -99,22 +104,12 @@ function handleCancel() {
     <div class="flex flex-col sm:flex-row gap-2 sm:items-start">
 
       <div class="sm:w-28 sm:shrink-0">
-        <div class="relative">
-          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs select-none">$</span>
-          <input
-            v-model="amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="0.00"
-            :disabled="disabled"
-            class="w-full pl-6 pr-2 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-                   focus:outline-none focus:ring-2 focus:border-transparent
-                   disabled:bg-gray-50 disabled:text-gray-400 transition"
-            :class="[focusClass, errors.amount ? 'border-danger/60 bg-danger/10' : 'border-gray-300']"
-          />
-        </div>
-        <p v-if="errors.amount" class="mt-1 text-xs text-danger/80 leading-tight">{{ errors.amount }}</p>
+        <AppAmountInput
+          v-model="amount"
+          :error="errors.amount"
+          :disabled="disabled"
+          :focus-class="focusClass"
+        />
       </div>
 
       <div class="flex-1">
@@ -156,29 +151,13 @@ function handleCancel() {
 
     <div class="flex flex-col sm:flex-row gap-2">
 
-      <div class="flex rounded-lg border border-gray-300 overflow-hidden divide-x divide-gray-300 text-sm sm:shrink-0">
-        <button
-          type="button"
+      <div class="sm:shrink-0">
+        <AppTypeToggle
+          v-model="paymentType"
+          :options="paymentOptions"
           :disabled="disabled"
-          @click="paymentType = 'cash'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors
-                 disabled:opacity-60 disabled:cursor-not-allowed"
-          :class="paymentType === 'cash' ? activeClass : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:banknote" class="w-3.5 h-3.5 shrink-0" />
-          Efectivo
-        </button>
-        <button
-          type="button"
-          :disabled="disabled"
-          @click="paymentType = 'transfer'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors
-                 disabled:opacity-60 disabled:cursor-not-allowed"
-          :class="paymentType === 'transfer' ? activeClass : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:arrow-right-left" class="w-3.5 h-3.5 shrink-0" />
-          Transferencia
-        </button>
+          :active-class="activeClass"
+        />
       </div>
 
       <div class="relative sm:w-44 sm:shrink-0">

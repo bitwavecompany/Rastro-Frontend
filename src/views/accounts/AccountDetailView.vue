@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
@@ -7,10 +7,17 @@ import { useToastStore } from '@/stores/useToastStore'
 import { useAccountDetail } from '@/composables/useAccountDetail'
 import { useAccountForm } from '@/composables/useAccountForm'
 import { useMovementForm } from '@/composables/useMovementForm'
-import { formatAmount, formatDate } from '@/utils/formatters'
+import { useDeleteConfirm } from '@/composables/useDeleteConfirm'
+import { formatAmount } from '@/utils/formatters'
+import AccountFormFields from '@/components/accounts/AccountFormFields.vue'
+import AppAmountInput from '@/components/ui/AppAmountInput.vue'
+import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
+import MovementRow from '@/components/transactions/MovementRow.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import type { Movement, MovementTab } from '@/composables/useAccountDetail'
+import type { Account } from '@/types/account'
+import type { PaymentType } from '@/types/transaction'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,14 +42,18 @@ const {
 const accountForm = useAccountForm()
 const movementForm = useMovementForm()
 
-const showDeleteAccountModal = ref(false)
-const showDeleteMovementModal = ref(false)
-const movementToDelete = ref<Movement | null>(null)
+const deleteAccount  = useDeleteConfirm<Account>()
+const deleteMovement = useDeleteConfirm<Movement>()
 
 const tabs: { key: MovementTab; label: string }[] = [
-  { key: 'all', label: 'Todos' },
-  { key: 'incomes', label: 'Ingresos' },
+  { key: 'all',      label: 'Todos' },
+  { key: 'incomes',  label: 'Ingresos' },
   { key: 'expenses', label: 'Gastos' },
+]
+
+const paymentOptions: { value: PaymentType; label: string; icon: string }[] = [
+  { value: 'cash',     label: 'Efectivo',      icon: 'lucide:banknote' },
+  { value: 'transfer', label: 'Transferencia', icon: 'lucide:arrow-right-left' },
 ]
 
 function goBack() {
@@ -55,25 +66,22 @@ async function handleDeleteAccountConfirm() {
     await accountsStore.remove(account.value.id)
     toast.success('Cuenta eliminada')
     router.replace({ name: 'accounts' })
-  } catch (error) {
+  } catch {
     toast.error('Error al eliminar la cuenta')
+  } finally {
+    deleteAccount.cancel()
   }
 }
 
-function handleDeleteMovementRequest(movement: Movement) {
-  movementToDelete.value = movement
-  showDeleteMovementModal.value = true
-}
-
 async function handleDeleteMovementConfirm(reason?: string) {
-  if (!movementToDelete.value) return
+  if (!deleteMovement.target.value) return
   try {
-    await transactionsStore.remove(movementToDelete.value.id, reason)
+    await transactionsStore.remove(deleteMovement.target.value.id, reason)
     toast.success('Registro eliminado')
-  } catch (error) {
+  } catch {
     toast.error('Error al eliminar el registro')
   } finally {
-    movementToDelete.value = null
+    deleteMovement.cancel()
   }
 }
 </script>
@@ -116,7 +124,7 @@ async function handleDeleteMovementConfirm(reason?: string) {
         </button>
         <button
           v-if="account.type !== 'cash'"
-          @click="showDeleteAccountModal = true"
+          @click="deleteAccount.request(account)"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-danger/20
                  text-xs font-medium text-danger/80 hover:bg-danger/10 transition-colors"
         >
@@ -184,56 +192,13 @@ async function handleDeleteMovementConfirm(reason?: string) {
 
         <template v-else>
           <div class="divide-y divide-gray-50 md:hidden">
-            <div
+            <MovementRow
               v-for="movement in filteredMovements"
               :key="`${movement.kind}-${movement.id}`"
-              class="px-4 py-3 flex items-start gap-3 transition-colors"
-              :class="movement.deletedAt ? 'opacity-75 bg-gray-50/50' : 'hover:bg-gray-50/60'"
-            >
-              <div
-                class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                :class="movement.kind === 'income' ? 'bg-income/20' : 'bg-danger/20'"
-              >
-                <Icon
-                  :icon="movement.kind === 'income' ? 'lucide:trending-up' : 'lucide:receipt'"
-                  class="w-3.5 h-3.5"
-                  :class="movement.kind === 'income' ? 'text-income' : 'text-danger/80'"
-                />
-              </div>
-              <div class="flex-1 min-w-0" :class="{ 'line-through': movement.deletedAt }">
-                <p class="text-sm font-medium text-gray-800 truncate">{{ movement.reason }}</p>
-                <p v-if="movement.description" class="text-xs text-gray-400 truncate mt-0.5">
-                  {{ movement.description }}
-                </p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ formatDate(movement.createdAt) }}</p>
-              </div>
-              <div class="shrink-0 flex items-center gap-0.5">
-                <p
-                  class="text-sm font-semibold mr-2"
-                  :class="[movement.kind === 'income' ? 'text-income' : 'text-danger/80', { 'line-through': movement.deletedAt }]"
-                >
-                  {{ movement.kind === 'income' ? '+' : '-' }}{{ formatAmount(movement.amount) }}
-                </p>
-                
-                <template v-if="!movement.deletedAt">
-                  <button
-                    @click="movementForm.open(movement)"
-                    class="p-1.5 rounded-md text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors"
-                    title="Editar"
-                  >
-                    <Icon icon="lucide:pencil" class="w-4 h-4" />
-                  </button>
-                  <button
-                    @click="handleDeleteMovementRequest(movement)"
-                    class="p-1.5 rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors"
-                    title="Eliminar"
-                  >
-                    <Icon icon="lucide:trash-2" class="w-4 h-4" />
-                  </button>
-                </template>
-                <span v-else class="text-[10px] font-bold text-danger/70 uppercase tracking-wider px-1">Anulado</span>
-              </div>
-            </div>
+              :item="movement"
+              @edit="movementForm.open($event)"
+              @delete="deleteMovement.request($event as Movement)"
+            />
           </div>
 
           <div class="hidden md:block overflow-x-auto">
@@ -249,62 +214,13 @@ async function handleDeleteMovementConfirm(reason?: string) {
                 </tr>
               </thead>
               <tbody>
-                <tr
+                <MovementRow
                   v-for="movement in filteredMovements"
                   :key="`${movement.kind}-${movement.id}`"
-                  class="border-b border-gray-50 last:border-0 transition-colors"
-                  :class="movement.deletedAt ? 'opacity-75 bg-gray-50/50' : 'hover:bg-gray-50/60'"
-                >
-                  <td class="px-6 py-4" :class="{ 'opacity-80': movement.deletedAt }">
-                    <div
-                      class="w-7 h-7 rounded-lg flex items-center justify-center"
-                      :class="movement.kind === 'income' ? 'bg-income/20' : 'bg-danger/20'"
-                    >
-                      <Icon
-                        :icon="movement.kind === 'income' ? 'lucide:trending-up' : 'lucide:receipt'"
-                        class="w-3.5 h-3.5"
-                        :class="movement.kind === 'income' ? 'text-income' : 'text-danger/80'"
-                      />
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-gray-700 max-w-[160px] truncate font-medium" :class="{ 'line-through': movement.deletedAt }">
-                    {{ movement.reason }}
-                  </td>
-                  <td class="px-6 py-4 text-gray-400 max-w-xs truncate" :class="{ 'line-through': movement.deletedAt }">
-                    <span v-if="movement.description">{{ movement.description }}</span>
-                    <span v-else class="text-gray-300">—</span>
-                  </td>
-                  <td class="px-6 py-4 text-gray-400 whitespace-nowrap text-xs">
-                    {{ formatDate(movement.createdAt) }}
-                  </td>
-                  <td
-                    class="px-6 py-4 text-right font-semibold whitespace-nowrap"
-                    :class="[movement.kind === 'income' ? 'text-income' : 'text-danger/80', { 'line-through': movement.deletedAt }]"
-                  >
-                    {{ movement.kind === 'income' ? '+' : '-' }}{{ formatAmount(movement.amount) }}
-                  </td>
-                  <td class="px-6 py-4 text-right whitespace-nowrap">
-                    <div class="flex items-center justify-end gap-1">
-                      <template v-if="!movement.deletedAt">
-                        <button
-                          @click="movementForm.open(movement)"
-                          class="p-1.5 rounded-md text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors"
-                          title="Editar"
-                        >
-                          <Icon icon="lucide:pencil" class="w-4 h-4" />
-                        </button>
-                        <button
-                          @click="handleDeleteMovementRequest(movement)"
-                          class="p-1.5 rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors"
-                          title="Eliminar"
-                        >
-                          <Icon icon="lucide:trash-2" class="w-4 h-4" />
-                        </button>
-                      </template>
-                      <span v-else class="text-xs font-bold text-danger/70 uppercase">Anulado</span>
-                    </div>
-                  </td>
-                </tr>
+                  :item="movement"
+                  @edit="movementForm.open($event)"
+                  @delete="deleteMovement.request($event as Movement)"
+                />
               </tbody>
             </table>
           </div>
@@ -320,76 +236,7 @@ async function handleDeleteMovementConfirm(reason?: string) {
     @cancel="accountForm.close()"
     @update:open="val => !val && accountForm.close()"
   >
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-        Nombre <span class="text-danger/60">*</span>
-      </label>
-      <input
-        v-model="accountForm.form.name"
-        type="text"
-        placeholder="Ej: Banco Pichincha"
-        class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-               focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-        :class="accountForm.errors.name ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-      />
-      <p v-if="accountForm.errors.name" class="mt-1 text-xs text-danger/80">{{ accountForm.errors.name }}</p>
-    </div>
-
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-        Saldo inicial <span class="text-danger/60">*</span>
-      </label>
-      <div class="relative">
-        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs select-none">$</span>
-        <input
-          v-model="accountForm.form.amount"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          class="w-full pl-6 pr-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-                 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-          :class="accountForm.errors.amount ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-        />
-      </div>
-      <p v-if="accountForm.errors.amount" class="mt-1 text-xs text-danger/80">{{ accountForm.errors.amount }}</p>
-    </div>
-
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Tipo</label>
-      <div class="flex rounded-lg border border-gray-300 overflow-hidden divide-x divide-gray-300 text-sm">
-        <button
-          type="button"
-          @click="accountForm.form.type = 'cash'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors"
-          :class="accountForm.form.type === 'cash' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:banknote" class="w-3.5 h-3.5 shrink-0" />
-          Efectivo
-        </button>
-        <button
-          type="button"
-          @click="accountForm.form.type = 'bank'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors"
-          :class="accountForm.form.type === 'bank' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:building-2" class="w-3.5 h-3.5 shrink-0" />
-          Banco
-        </button>
-      </div>
-    </div>
-
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Descripción</label>
-      <input
-        v-model="accountForm.form.description"
-        type="text"
-        placeholder="Opcional"
-        class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900
-               placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100
-               focus:border-transparent transition"
-      />
-    </div>
+    <AccountFormFields :form="accountForm.form" :errors="accountForm.errors" />
   </AppFormDialog>
 
   <AppFormDialog
@@ -403,20 +250,10 @@ async function handleDeleteMovementConfirm(reason?: string) {
       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
         Monto <span class="text-danger/60">*</span>
       </label>
-      <div class="relative">
-        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs select-none">$</span>
-        <input
-          v-model="movementForm.form.amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          placeholder="0.00"
-          class="w-full pl-6 pr-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-                 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-          :class="movementForm.errors.amount ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-        />
-      </div>
-      <p v-if="movementForm.errors.amount" class="mt-1 text-xs text-danger/80">{{ movementForm.errors.amount }}</p>
+      <AppAmountInput
+        v-model="movementForm.form.amount"
+        :error="movementForm.errors.amount"
+      />
     </div>
 
     <div>
@@ -436,26 +273,10 @@ async function handleDeleteMovementConfirm(reason?: string) {
 
     <div>
       <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Tipo de pago</label>
-      <div class="flex rounded-lg border border-gray-300 overflow-hidden divide-x divide-gray-300 text-sm">
-        <button
-          type="button"
-          @click="movementForm.form.paymentType = 'cash'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors"
-          :class="movementForm.form.paymentType === 'cash' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:banknote" class="w-3.5 h-3.5 shrink-0" />
-          Efectivo
-        </button>
-        <button
-          type="button"
-          @click="movementForm.form.paymentType = 'transfer'"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 font-medium transition-colors"
-          :class="movementForm.form.paymentType === 'transfer' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-        >
-          <Icon icon="lucide:arrow-right-left" class="w-3.5 h-3.5 shrink-0" />
-          Transferencia
-        </button>
-      </div>
+      <AppTypeToggle
+        v-model="movementForm.form.paymentType"
+        :options="paymentOptions"
+      />
     </div>
 
     <div>
@@ -472,20 +293,20 @@ async function handleDeleteMovementConfirm(reason?: string) {
   </AppFormDialog>
 
   <AppModal
-    v-model:open="showDeleteAccountModal"
+    v-model:open="deleteAccount.isOpen.value"
     title="Eliminar cuenta"
-    :description="`¿Deseas eliminar '${account?.name}'? Esta acción no se puede deshacer.`"
+    :description="`¿Deseas eliminar '${deleteAccount.target.value?.name}'? Esta acción no se puede deshacer.`"
     confirm-label="Eliminar"
     cancel-label="Cancelar"
     variant="danger"
     @confirm="handleDeleteAccountConfirm"
-    @cancel="showDeleteAccountModal = false"
+    @cancel="deleteAccount.cancel"
   />
 
   <AppModal
-    v-model:open="showDeleteMovementModal"
+    v-model:open="deleteMovement.isOpen.value"
     title="Eliminar registro"
-    :description="movementToDelete ? `¿Deseas eliminar '${movementToDelete.reason}'?` : undefined"
+    :description="deleteMovement.target.value ? `¿Deseas eliminar '${deleteMovement.target.value.reason}'?` : undefined"
     confirm-label="Eliminar"
     cancel-label="Cancelar"
     variant="danger"
@@ -493,6 +314,6 @@ async function handleDeleteMovementConfirm(reason?: string) {
     reason-label="¿Por qué eliminas este registro?"
     reason-placeholder="Ej: duplicado, error de cálculo..."
     @confirm="handleDeleteMovementConfirm"
-    @cancel="movementToDelete = null"
+    @cancel="deleteMovement.cancel"
   />
 </template>
