@@ -1,54 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { crearGasto, obtenerGastos, type Gasto } from '@/api/gastos'
+import { onMounted, ref } from 'vue'
+import AppLayout from '@/components/layout/AppLayout.vue'
+import AppToastContainer from '@/components/ui/AppToastContainer.vue'
+import { useProfileStore } from '@/stores/useProfileStore'
+import { useAccountsStore } from '@/stores/useAccountsStore'
+import { useTransactionsStore } from '@/stores/useTransactionsStore'
 
-const listaGastos = ref<Gasto[]>([])
+const profileStore = useProfileStore()
+const accountsStore = useAccountsStore()
+const transactionsStore = useTransactionsStore()
 
-const guardarGasto = async () => {
-  try {
-    await crearGasto({ description: 'Cena de prueba', amount: 15.5 })
-    alert('¡Gasto guardado en PostgreSQL!')
-  } catch (error) {
-    console.error('Error al guardar gasto:', error)
-  }
-}
+const isAppReady = ref(false)
 
-const leerGastos = async () => {
-  try {
-    const { data } = await obtenerGastos()
-    listaGastos.value = data
-  } catch (error) {
-    console.error('Error al leer gastos:', error)
-  }
-}
+onMounted(async () => {
+  await Promise.all([
+    profileStore.load(),
+    accountsStore.load(),
+    transactionsStore.load()
+  ])
+  isAppReady.value = true
+})
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 p-8">
-    <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6">
-      <h1 class="text-2xl font-bold text-gray-800 mb-2">Rastro</h1>
-      <h2 class="text-lg text-gray-600 mb-6">Prueba de Conexión Backend</h2>
+  <AppToastContainer />
 
-      <div class="flex gap-4 mb-6">
-        <button
-          @click="guardarGasto"
-          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-        >
-          1. Enviar Gasto de Prueba
-        </button>
-
-        <button
-          @click="leerGastos"
-          class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-        >
-          2. Leer Base de Datos
-        </button>
-      </div>
-
-      <div>
-        <h3 class="font-semibold text-gray-700 mb-2">Datos en PostgreSQL:</h3>
-        <pre class="bg-gray-100 p-4 rounded-lg overflow-auto">{{ listaGastos }}</pre>
-      </div>
-    </div>
+  <AppLayout v-if="isAppReady" />
+  
+  <div v-else class="min-h-screen flex items-center justify-center bg-gray-50">
+    <div class="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
   </div>
 </template>
