@@ -18,6 +18,7 @@ onMounted(async () => {
     accountsStore.load(),
     transactionsStore.load()
   ])
+  
   isAppReady.value = true
 })
 </script>
