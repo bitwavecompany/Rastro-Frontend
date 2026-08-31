@@ -60,8 +60,8 @@ function handleDeleteFromDetail() {
   }
 }
 
-function getAccountName(accountId: number) {
-  const account = accountsStore.accounts.find(a => a.id === accountId)
+function getAccountName(accountId: string | number) {
+  const account = accountsStore.accounts.find(a => String(a.id) === String(accountId))
   return account ? account.name : 'Desconocida'
 }
 </script>

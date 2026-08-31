@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProfileStore } from '@/stores/useProfileStore'
 import { useToastStore } from '@/stores/useToastStore'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import packageJson from '../../package.json'
+import { authApi } from '@/api/auth'
 
+const router = useRouter()
 const store = useProfileStore()
 const toast = useToastStore()
 
@@ -13,6 +17,12 @@ const isSaving = ref(false)
 const aliasForm = ref(store.profile.name)
 const aliasError = ref('')
 const isDeleteModalOpen = ref(false)
+
+const isPremiumModalOpen = ref(false)
+const isPremiumSuccessModalOpen = ref(false)
+const isSubmittingPremium = ref(false)
+const premiumForm = ref({ bank: '', receipt: '' })
+const premiumErrors = ref({ bank: '', receipt: '' })
 
 const roleBadge = computed(() => {
   const token = store.profile.roleToken
@@ -45,8 +55,8 @@ async function handleSaveAlias() {
   try {
     await store.save({ name: aliasForm.value.trim() })
     toast.success('Alias actualizado')
-  } catch {
-    toast.error('Error al actualizar el alias')
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Error al actualizar el alias')
   } finally {
     isSaving.value = false
     isEditingAlias.value = false
@@ -63,11 +73,45 @@ function confirmClearData() {
 }
 
 function handleRegisterClick() {
-  toast.info('Registro y sincronización en la nube próximamente.', 4000)
+  router.push('/register')
 }
 
 function handlePremiumClick() {
-  toast.info('Pasarela de pagos en desarrollo.', 4000)
+  premiumForm.value = { bank: '', receipt: '' }
+  premiumErrors.value = { bank: '', receipt: '' }
+  isPremiumModalOpen.value = true
+}
+
+async function handlePremiumSubmit() {
+  premiumErrors.value = { bank: '', receipt: '' }
+  let valid = true
+
+  if (!premiumForm.value.bank.trim()) {
+    premiumErrors.value.bank = 'El banco es obligatorio'
+    valid = false
+  }
+  if (!premiumForm.value.receipt.trim()) {
+    premiumErrors.value.receipt = 'El comprobante es obligatorio'
+    valid = false
+  }
+
+  if (!valid) return
+
+  isSubmittingPremium.value = true
+
+  try {
+    await authApi.requestPremium({
+      payment_method: 'transfer',
+      payment_bank: premiumForm.value.bank.trim(),
+      payment_receipt: premiumForm.value.receipt.trim()
+    })
+    isPremiumModalOpen.value = false
+    isPremiumSuccessModalOpen.value = true
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Error al enviar la solicitud')
+  } finally {
+    isSubmittingPremium.value = false
+  }
 }
 </script>
 
@@ -84,8 +128,7 @@ function handlePremiumClick() {
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest self-start mt-1"
           :class="roleBadge.classes"
         >
-          <FreeIcon v-if="!isPremium" height="1em" class="opacity-80" />
-          <Icon v-else icon="lucide:crown" class="w-3 h-3" />
+          <Icon v-if="isPremium" icon="lucide:crown" class="w-3 h-3" />
           {{ roleBadge.label }}
         </span>
       </div>
@@ -102,7 +145,12 @@ function handlePremiumClick() {
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-white truncate">{{ store.profile.name }}</p>
-              <p class="text-xs text-white/40 truncate mt-0.5 font-mono">{{ store.profile.id }}</p>
+              <p 
+                class="text-xs text-white/40 truncate mt-0.5" 
+                :class="{'font-mono': !store.profile.email}"
+              >
+                {{ store.profile.email || store.profile.id }}
+              </p>
             </div>
           </div>
         </div>
@@ -132,12 +180,20 @@ function handlePremiumClick() {
                   <p class="text-xs text-gray-600 mt-0.5">50 registros, 2 cuentas adicionales y copia en la nube.</p>
                 </div>
               </div>
-              <button
-                @click="handleRegisterClick"
-                class="shrink-0 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 transition-colors w-full sm:w-auto"
-              >
-                Registrarse
-              </button>
+              <div class="flex flex-col gap-2 shrink-0 w-full sm:w-auto">
+                <button
+                  @click="handleRegisterClick"
+                  class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 transition-colors w-full"
+                >
+                  Registrarse
+                </button>
+                <button
+                  @click="router.push('/login')"
+                  class="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors w-full"
+                >
+                  Iniciar sesión
+                </button>
+              </div>
             </div>
 
             <div v-if="isGuest || isRegistered" class="bg-amber-50/30 rounded-xl p-4 border border-amber-200/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -171,6 +227,7 @@ function handlePremiumClick() {
 
           <div v-if="!isEditingAlias" class="space-y-2">
             <button
+              v-if="isGuest"
               @click="startEditingAlias"
               class="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
@@ -187,7 +244,7 @@ function handlePremiumClick() {
             >
               <div class="flex items-center gap-3">
                 <Icon icon="lucide:trash-2" class="w-4 h-4 text-danger/70" />
-                Borrar todos los datos
+                Borrar todos los datos locales
               </div>
               <Icon icon="lucide:chevron-right" class="w-4 h-4 text-danger/30" />
             </button>
@@ -256,5 +313,57 @@ function handlePremiumClick() {
     cancel-label="Cancelar"
     variant="danger"
     @confirm="confirmClearData"
+  />
+
+  <AppFormDialog
+    v-model:open="isPremiumModalOpen"
+    title="Solicitar Plan Premium"
+    confirm-label="Enviar comprobante"
+    cancel-label="Cancelar"
+    :loading="isSubmittingPremium"
+    @confirm="handlePremiumSubmit"
+    @cancel="isPremiumModalOpen = false"
+  >
+    <div class="space-y-4">
+      <p class="text-sm text-gray-600">
+        Ingresa los datos de tu transferencia para verificar tu pago y activar tu cuenta Premium.
+      </p>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+          Banco de origen
+        </label>
+        <input
+          v-model="premiumForm.bank"
+          type="text"
+          placeholder="Ej: Banco Pichincha"
+          class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
+          :class="premiumErrors.bank ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
+        />
+        <p v-if="premiumErrors.bank" class="mt-1 text-xs text-danger/80">{{ premiumErrors.bank }}</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+          Número de comprobante
+        </label>
+        <input
+          v-model="premiumForm.receipt"
+          type="text"
+          placeholder="Ej: 123456789"
+          class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
+          :class="premiumErrors.receipt ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
+        />
+        <p v-if="premiumErrors.receipt" class="mt-1 text-xs text-danger/80">{{ premiumErrors.receipt }}</p>
+      </div>
+    </div>
+  </AppFormDialog>
+
+  <AppModal
+    v-model:open="isPremiumSuccessModalOpen"
+    title="Solicitud enviada"
+    description="Gracias por tu suscripción. En breve verificaremos tu comprobante y activaremos tu plan Premium."
+    confirm-label="Aceptar"
+    cancel-label="Cerrar"
+    @confirm="isPremiumSuccessModalOpen = false"
+    @cancel="isPremiumSuccessModalOpen = false"
   />
 </template>

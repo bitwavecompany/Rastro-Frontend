@@ -25,7 +25,7 @@ const amount      = ref<number | ''>('')
 const reason      = ref('')
 const description = ref('')
 const paymentType = ref<PaymentType>('cash')
-const accountId   = ref<number | ''>('')
+const accountId   = ref<string | number | ''>('')
 const errors      = ref<Partial<Record<'amount' | 'reason' | 'accountId', string>>>({})
 
 const filteredAccounts = computed(() => {
@@ -33,12 +33,18 @@ const filteredAccounts = computed(() => {
   return accountsStore.accounts.filter(a => a.type === targetType)
 })
 
-watch(filteredAccounts, (newAccounts) => {
-  const isValid = newAccounts.some(a => a.id === accountId.value)
-  if (!isValid) {
-    accountId.value = newAccounts.length > 0 ? newAccounts[0].id : ''
-  }
-}, { immediate: true })
+watch(
+  () => [filteredAccounts.value, accountsStore.isLoaded] as const,
+  ([newAccounts]) => {
+    if (!props.editingItem) {
+      const isValid = newAccounts.some(a => String(a.id) === String(accountId.value))
+      if (!isValid) {
+        accountId.value = newAccounts.length > 0 ? newAccounts[0].id : ''
+      }
+    }
+  },
+  { immediate: true }
+)
 
 const ringClass   = computed(() => props.kind === 'expense' ? 'ring-primary/20 border-primary/50' : 'ring-income/20 border-green-300')
 const focusClass  = computed(() => props.kind === 'expense' ? 'focus:ring-primary/100' : 'focus:ring-income/100')
@@ -60,6 +66,7 @@ function resetForm() {
   reason.value      = ''
   description.value = ''
   paymentType.value = 'cash'
+  accountId.value   = filteredAccounts.value.length > 0 ? filteredAccounts.value[0].id : ''
   errors.value      = {}
 }
 
@@ -95,7 +102,7 @@ function handleSubmit() {
     amount:      Number(amount.value),
     reason:      reason.value.trim(),
     paymentType: paymentType.value,
-    accountId:   Number(accountId.value),
+    accountId:   accountId.value,
     ...(description.value.trim() && { description: description.value.trim() }),
   })
   resetForm()

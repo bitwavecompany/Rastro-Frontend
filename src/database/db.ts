@@ -4,8 +4,8 @@ import type { Transaction } from '@/types/transaction'
 import type { Profile } from '@/types/profile'
 
 export class RastroDatabase extends Dexie {
-  accounts!: Table<Account, number>
-  transactions!: Table<Transaction, number>
+  accounts!: Table<Account, string | number>
+  transactions!: Table<Transaction, string | number>
   profile!: Table<Profile, string>
 
   constructor() {

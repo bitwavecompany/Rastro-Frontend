@@ -135,6 +135,27 @@ function navigate(to: string) {
         </div>
       </header>
 
+      <div 
+        v-if="profileStore.justUpgraded" 
+        class="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-3 flex items-start sm:items-center justify-between gap-3 shadow-md shrink-0 z-10"
+      >
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+            <Icon icon="lucide:sparkles" class="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p class="text-sm font-bold leading-tight">¡Felicidades! Tu cuenta Premium fue aprobada.</p>
+            <p class="text-xs text-amber-100 mt-0.5">Tus límites han sido removidos automáticamente.</p>
+          </div>
+        </div>
+        <button 
+          @click="profileStore.dismissUpgradeBanner()" 
+          class="p-1 hover:bg-white/20 rounded-md transition shrink-0"
+        >
+          <Icon icon="lucide:x" class="w-4 h-4" />
+        </button>
+      </div>
+
       <main class="flex-1 overflow-y-auto pb-16 md:pb-0">
         <RouterView />
       </main>

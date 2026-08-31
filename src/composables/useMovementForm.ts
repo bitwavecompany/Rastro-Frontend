@@ -49,7 +49,7 @@ export function useMovementForm() {
     return !errors.amount && !errors.reason
   }
 
-  async function submit(): Promise<boolean> {
+async function submit(): Promise<boolean> {
     if (!validate() || !editing.value) return false
 
     const payload: Partial<CreateTransactionPayload> = {
@@ -64,8 +64,8 @@ export function useMovementForm() {
       toast.success(editing.value.kind === 'expense' ? 'Gasto actualizado' : 'Ingreso actualizado')
       close()
       return true
-    } catch (error) {
-      toast.error('Ocurrió un error al actualizar')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Ocurrió un error al actualizar')
       return false
     }
   }

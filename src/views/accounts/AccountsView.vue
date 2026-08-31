@@ -21,8 +21,8 @@ async function handleDeleteConfirm() {
   try {
     await store.remove(deleteConfirm.target.value.id)
     toast.success('Cuenta eliminada')
-  } catch {
-    toast.error('Error al eliminar la cuenta')
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Error al eliminar la cuenta')
   } finally {
     deleteConfirm.cancel()
   }

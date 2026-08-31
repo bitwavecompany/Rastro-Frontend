@@ -77,7 +77,7 @@ export function useAccountForm() {
     }
   }
 
-  async function submit(accountId?: number): Promise<boolean> {
+async function submit(accountId?: string | number): Promise<boolean> {
     if (!validate()) return false
     const payload = buildPayload()
     
@@ -91,8 +91,8 @@ export function useAccountForm() {
       }
       close()
       return true
-    } catch (error) {
-      toast.error('Ocurrió un error al guardar')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Ocurrió un error al guardar')
       return false
     }
   }

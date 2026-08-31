@@ -1,7 +1,7 @@
 export type AccountType = 'cash' | 'bank'
 
 export interface Account {
-  id: number
+  id: string | number
   name: string
   type: AccountType
   amount: number

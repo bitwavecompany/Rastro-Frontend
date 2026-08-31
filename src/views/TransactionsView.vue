@@ -58,7 +58,6 @@ const deleteConfirm = useDeleteConfirm<Transaction>()
 async function handleSubmit(payload: CreateTransactionPayload) {
   if (!editingItem.value) {
     const activeRecords = items.value.filter(t => !t.deletedAt).length
-
     if (activeRecords >= maxRecords.value) {
       const typeName = props.kind === 'expense' ? 'gastos' : 'ingresos'
       if (profileStore.profile.roleToken === 'Z3Vlc3RfbGV2ZWxfMjAyNg==') {
@@ -72,6 +71,7 @@ async function handleSubmit(payload: CreateTransactionPayload) {
 
   isSubmitting.value = true
   error.value        = null
+
   try {
     if (editingItem.value) {
       await store.update(editingItem.value.id, payload)
@@ -81,9 +81,14 @@ async function handleSubmit(payload: CreateTransactionPayload) {
       await store.add(payload)
       toast.success(props.kind === 'expense' ? 'Gasto registrado' : 'Ingreso registrado')
     }
-  } catch {
-    error.value = 'Error al guardar. Intenta de nuevo.'
-    toast.error('Ocurrió un error al guardar')
+  } catch (err: any) {
+    if (err.response?.status === 422) {
+      const errors = err.response.data.errors
+      error.value = errors[Object.keys(errors)[0]][0]
+    } else {
+      error.value = err.response?.data?.message || 'Error al conectar con el servidor'
+    }
+    toast.error(error.value as string)
   } finally {
     isSubmitting.value = false
   }
@@ -106,8 +111,9 @@ async function handleDeleteConfirm(reason?: string) {
   try {
     await store.remove(deleteConfirm.target.value.id, reason)
     toast.success(props.kind === 'expense' ? 'Gasto eliminado' : 'Ingreso eliminado')
-  } catch {
-    toast.error('Error al eliminar el registro')
+  } catch (err: any) {
+    const msg = err.response?.data?.message || 'Error al eliminar el registro'
+    toast.error(msg)
   } finally {
     deleteConfirm.cancel()
   }

@@ -26,7 +26,7 @@ const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const toast = useToastStore()
 
-const accountId = computed(() => Number(route.params.id))
+const accountId = computed(() => route.params.id as string | number)
 
 const {
   account,
@@ -66,8 +66,8 @@ async function handleDeleteAccountConfirm() {
     await accountsStore.remove(account.value.id)
     toast.success('Cuenta eliminada')
     router.replace({ name: 'accounts' })
-  } catch {
-    toast.error('Error al eliminar la cuenta')
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Error al eliminar la cuenta')
   } finally {
     deleteAccount.cancel()
   }
@@ -78,8 +78,8 @@ async function handleDeleteMovementConfirm(reason?: string) {
   try {
     await transactionsStore.remove(deleteMovement.target.value.id, reason)
     toast.success('Registro eliminado')
-  } catch {
-    toast.error('Error al eliminar el registro')
+  } catch (error: any) {
+    toast.error(error.response?.data?.message || 'Error al eliminar el registro')
   } finally {
     deleteMovement.cancel()
   }

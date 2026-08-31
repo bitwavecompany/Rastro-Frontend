@@ -2,13 +2,13 @@ export type PaymentType = 'cash' | 'transfer'
 export type TransactionKind = 'expense' | 'income'
 
 export interface Transaction {
-  id: number
+  id: string | number
   kind: TransactionKind
   amount: number
   reason: string
   description?: string
   paymentType: PaymentType
-  accountId: number
+  accountId: string | number
   createdAt: string
   deletedAt?: string
   deleteReason?: string

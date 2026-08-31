@@ -7,14 +7,14 @@ export type MovementTab = 'all' | 'incomes' | 'expenses'
 
 export type Movement = Transaction & { _type: TransactionKind }
 
-export function useAccountDetail(accountId: number) {
+export function useAccountDetail(accountId: string | number) {
   const accountsStore = useAccountsStore()
   const transactionsStore = useTransactionsStore()
 
   const activeTab = ref<MovementTab>('all')
 
   const account = computed(() =>
-    accountsStore.accounts.find(a => a.id === accountId) ?? null
+    accountsStore.accounts.find(a => String(a.id) === String(accountId)) ?? null
   )
 
   const accountExpenses = computed(() =>
