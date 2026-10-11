@@ -63,8 +63,18 @@ const router = createRouter({
       path:      '/admin/dashboard',
       name:      'admin-dashboard',
       component: AdminDashboardView,
+      meta:      { requiresAuth: true }
     },
   ],
+})
+
+router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('auth_token')
+  if (to.meta.requiresAuth && !token) {
+    next({ name: 'admin-login' })
+  } else {
+    next()
+  }
 })
 
 export default router

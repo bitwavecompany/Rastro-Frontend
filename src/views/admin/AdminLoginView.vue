@@ -3,11 +3,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/useToastStore'
 import { useProfileStore } from '@/stores/useProfileStore'
+import { useSessionStore } from '@/stores/useSessionStore'
 import api from '@/api/axios'
 
 const router = useRouter()
 const toast = useToastStore()
 const profileStore = useProfileStore()
+const sessionStore = useSessionStore()
 
 const form = ref({ email: '', password: '' })
 const isLoading = ref(false)
@@ -28,7 +30,7 @@ async function handleLogin() {
       password: form.value.password
     })
 
-    const { token, user } = response.data.data
+    const { token, refresh_token: refreshToken, user } = response.data.data
 
     // Validar que sea administrador
     if (user.role !== 'admin') {
@@ -36,13 +38,13 @@ async function handleLogin() {
       return
     }
 
-    localStorage.setItem('auth_token', token)
+    sessionStore.setTokens(token, refreshToken)
     
     await profileStore.save({
       id: String(user.id),
       name: user.name,
       email: user.email,
-      roleToken: 'admin_level_2026' // Token visual interno si se desea usar
+      role: 'admin',
     })
 
     toast.success('¡Bienvenido Administrador!')

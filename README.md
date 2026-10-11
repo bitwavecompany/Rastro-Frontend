@@ -117,6 +117,13 @@ npx cap open android
 
 ```
 
+## 🏗️ Architecture Insights
+
+Based on Graphify system analysis, the application's core architecture revolves around the following patterns:
+- **Core Abstractions**: `vue`, `vue-router`, and `pinia` are the primary state and navigation drivers.
+- **State & Form Handling**: High-centrality composables like `useAccountForm()` and `useMovementForm()` bridge the gap between our UI components and the local Dexie database, acting as critical cross-community bridges.
+- **Feature Modules**: The app is heavily modularized into distinct view communities (e.g., `AccountDetailView`, `ProfileView`, and `TransactionsView`), ensuring clean separation of concerns and maintainability.
+
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://www.google.com/search?q=https://github.com/bitwavecompany/Rastro-Frontend/issues).

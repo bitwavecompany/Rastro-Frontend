@@ -99,11 +99,12 @@ const translatedMonthLabel = computed(() => {
           </button>
         </div>
         <div class="divide-y divide-gray-50">
-          <div
+          <button
+            type="button"
             v-for="account in accounts"
             :key="account.id"
             @click="router.push({ name: 'account-detail', params: { id: account.id } })"
-            class="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-colors cursor-pointer"
+            class="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-all cursor-pointer active:scale-[0.98] active:bg-gray-50"
           >
             <div
               class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -113,10 +114,10 @@ const translatedMonthLabel = computed(() => {
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-800 truncate">{{ account.name }}</p>
-              <p class="text-xs text-gray-400">{{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}</p>
+              <p class="text-xs text-gray-500">{{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}</p>
             </div>
             <p class="text-sm font-semibold text-gray-900 shrink-0">{{ formatAmount(getAccountBalance(account.id, account.amount)) }}</p>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -137,10 +138,11 @@ const translatedMonthLabel = computed(() => {
         </div>
 
         <div v-else class="divide-y divide-gray-50">
-          <div
+          <button
+            type="button"
             v-for="t in recentTransactions"
             :key="`${t.kind}-${t.id}`"
-            class="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-colors cursor-pointer"
+            class="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-all cursor-pointer active:scale-[0.98] active:bg-gray-50"
             @click="router.push({ name: t.kind === 'expense' ? 'expenses' : 'incomes' })"
           >
             <div
@@ -155,7 +157,7 @@ const translatedMonthLabel = computed(() => {
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-800 truncate">{{ t.reason }}</p>
-              <p class="text-xs text-gray-400">{{ formatDate(t.createdAt) }}</p>
+              <p class="text-xs text-gray-500">{{ formatDate(t.date || t.createdAt) }}</p>
             </div>
             <p
               class="text-sm font-semibold shrink-0"
@@ -163,7 +165,7 @@ const translatedMonthLabel = computed(() => {
             >
               {{ t.kind === 'income' ? '+' : '-' }}{{ formatAmount(t.amount) }}
             </p>
-          </div>
+          </button>
         </div>
       </div>
 

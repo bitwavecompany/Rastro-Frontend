@@ -8,7 +8,8 @@ const props = withDefaults(
     description?: string
     confirmLabel?: string
     cancelLabel?: string
-    variant?: 'default' | 'danger'
+    variant?: 'default' | 'danger' | 'warning'
+    confirmDisabled?: boolean
     requireReason?: boolean
     reasonLabel?: string
     reasonPlaceholder?: string
@@ -90,6 +91,12 @@ function handleCancel() {
                   <Icon icon="lucide:triangle-alert" class="w-4 h-4 text-danger" />
                 </div>
                 <div
+                  v-else-if="variant === 'warning'"
+                  class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0"
+                >
+                  <Icon icon="lucide:alert-circle" class="w-4 h-4 text-amber-600" />
+                </div>
+                <div
                   v-else
                   class="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center shrink-0"
                 >
@@ -131,10 +138,13 @@ function handleCancel() {
               </button>
               <button
                 @click="handleConfirm"
-                class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                :disabled="confirmDisabled"
+                class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :class="variant === 'danger'
                   ? 'bg-danger text-white hover:bg-danger/90 active:bg-danger/80'
-                  : 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'"
+                  : variant === 'warning'
+                    ? 'bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800'
+                    : 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'"
               >
                 {{ confirmLabel }}
               </button>

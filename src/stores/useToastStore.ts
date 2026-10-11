@@ -6,10 +6,21 @@ export const useToastStore = defineStore('toast', () => {
   const toasts = ref<Toast[]>([])
 
   function add(message: string, type: ToastType = 'info', duration = 3500) {
+    // Evitar stacking si el mensaje es exactamente igual al último
+    const lastToast = toasts.value[toasts.value.length - 1]
+    if (lastToast && lastToast.message === message && lastToast.type === type) {
+      return
+    }
+
     const id = Math.random().toString(36).substring(2, 9)
     const toast: Toast = { id, message, type, duration }
     
     toasts.value.push(toast)
+
+    // Límite máximo en pantalla (máximo 3)
+    if (toasts.value.length > 3) {
+      toasts.value.shift()
+    }
 
     if (duration > 0) {
       setTimeout(() => {

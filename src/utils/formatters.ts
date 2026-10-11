@@ -1,6 +1,9 @@
 import dayjs from 'dayjs'
-import type { PaymentType } from '@/types/transaction'
-import type { AccountType } from '@/types/account'
+import 'dayjs/locale/es'
+import type { PaymentType } from '@/constants/transactions'
+import type { AccountType } from '@/constants/accounts'
+
+dayjs.locale('es')
 
 export function formatAmount(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -9,8 +12,9 @@ export function formatAmount(amount: number): string {
   }).format(amount)
 }
 
-export function formatDate(iso: string): string {
-  return dayjs(iso).format('D MMM YYYY · h:mm A')
+export function formatDate(iso?: string | null): string {
+  if (!iso) return ''
+  return dayjs(iso).locale('es').format('DD MMM YYYY').toLowerCase()
 }
 
 export function paymentLabel(type: PaymentType): string {

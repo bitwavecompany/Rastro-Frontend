@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { Transaction, TransactionKind } from '@/types/transaction'
+import type { Transaction } from '@/types/transaction'
+import type { TransactionKind } from '@/constants/transactions'
 import MovementRow from '@/components/transactions/MovementRow.vue'
 import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import { formatAmount, formatDate, paymentLabel } from '@/utils/formatters'
@@ -9,11 +10,17 @@ import { useAccountsStore } from '@/stores/useAccountsStore'
 const props = defineProps<{
   kind: TransactionKind
   items: Transaction[]
+  deactivatedCount?: number
+  hideDeactivated?: boolean
 }>()
 
 const emit = defineEmits<{
   edit: [item: Transaction]
+  relocate: [item: Transaction]
   delete: [item: Transaction]
+  restore: [item: Transaction]
+  'hard-delete': [item: Transaction]
+  'update:hideDeactivated': [val: boolean]
 }>()
 
 const accountsStore = useAccountsStore()
@@ -53,6 +60,13 @@ function handleEditFromDetail() {
   }
 }
 
+function handleRelocateFromDetail() {
+  if (selectedItem.value) {
+    emit('relocate', selectedItem.value)
+    isDetailOpen.value = false
+  }
+}
+
 function handleDeleteFromDetail() {
   if (selectedItem.value) {
     emit('delete', selectedItem.value)
@@ -61,7 +75,7 @@ function handleDeleteFromDetail() {
 }
 
 function getAccountName(accountId: string | number) {
-  const account = accountsStore.accounts.find(a => String(a.id) === String(accountId))
+  const account = accountsStore._rawAccounts.find(a => String(a.id) === String(accountId))
   return account ? account.name : 'Desconocida'
 }
 </script>
@@ -70,9 +84,21 @@ function getAccountName(accountId: string | number) {
   <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
     <div class="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
       <h2 class="text-base font-semibold text-gray-900">{{ title }}</h2>
-      <span class="text-xs text-gray-400 font-medium">
-        {{ items.length }} registro{{ items.length !== 1 ? 's' : '' }}
-      </span>
+      <div class="flex items-center gap-3">
+        <button
+          v-if="(deactivatedCount ?? 0) > 0"
+          type="button"
+          @click="emit('update:hideDeactivated', !hideDeactivated)"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition"
+          :class="hideDeactivated ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+        >
+          <Icon :icon="hideDeactivated ? 'lucide:eye' : 'lucide:eye-off'" class="w-3.5 h-3.5" />
+          {{ hideDeactivated ? `Mostrar desactivados (${deactivatedCount})` : 'Ocultar desactivados' }}
+        </button>
+        <span class="text-xs text-gray-400 font-medium">
+          {{ items.length }} registro{{ items.length !== 1 ? 's' : '' }}
+        </span>
+      </div>
     </div>
 
     <div v-if="items.length === 0" class="py-14 text-center">
@@ -91,7 +117,10 @@ function getAccountName(accountId: string | number) {
           :show-account="true"
           @select="openDetails"
           @edit="emit('edit', $event)"
+          @relocate="emit('relocate', $event)"
           @delete="emit('delete', $event)"
+          @restore="emit('restore', $event)"
+          @hard-delete="emit('hard-delete', $event)"
         />
       </div>
 
@@ -117,7 +146,10 @@ function getAccountName(accountId: string | number) {
               :show-account="true"
               @select="openDetails"
               @edit="emit('edit', $event)"
+              @relocate="emit('relocate', $event)"
               @delete="emit('delete', $event)"
+              @restore="emit('restore', $event)"
+              @hard-delete="emit('hard-delete', $event)"
             />
           </tbody>
         </table>
@@ -128,17 +160,17 @@ function getAccountName(accountId: string | number) {
   <AppFormDialog
     v-model:open="isDetailOpen"
     title="Detalle del movimiento"
-    :confirm-label="selectedItem?.deletedAt ? 'Aceptar' : 'Editar'"
-    :cancel-label="selectedItem?.deletedAt ? 'Cerrar' : 'Eliminar'"
-    @confirm="selectedItem?.deletedAt ? (isDetailOpen = false) : handleEditFromDetail()"
-    @cancel="selectedItem?.deletedAt ? (isDetailOpen = false) : handleDeleteFromDetail()"
+    :confirm-label="(selectedItem?.deletedAt || selectedItem?.deleted_at) ? 'Aceptar' : 'Editar'"
+    :cancel-label="(selectedItem?.deletedAt || selectedItem?.deleted_at) ? 'Cerrar' : 'Desactivar'"
+    @confirm="(selectedItem?.deletedAt || selectedItem?.deleted_at) ? (isDetailOpen = false) : handleEditFromDetail()"
+    @cancel="(selectedItem?.deletedAt || selectedItem?.deleted_at) ? (isDetailOpen = false) : handleDeleteFromDetail()"
   >
     <div v-if="selectedItem" class="space-y-4">
       <div class="text-center pb-4 border-b border-gray-100">
-        <p class="text-3xl font-bold" :class="selectedItem.kind === 'income' ? 'text-income' : 'text-danger/80'">
-          {{ selectedItem.kind === 'income' ? '+' : '-' }}{{ formatAmount(selectedItem.amount) }}
+        <p class="text-3xl font-bold" :class="(selectedItem.kind === 'income' || selectedItem.type === 'income') ? 'text-income' : 'text-danger/80'">
+          {{ (selectedItem.kind === 'income' || selectedItem.type === 'income') ? '+' : '-' }}{{ formatAmount(selectedItem.amount) }}
         </p>
-        <p class="text-base font-medium text-gray-800 mt-1" :class="{ 'line-through': selectedItem.deletedAt }">
+        <p class="text-base font-medium text-gray-800 mt-1" :class="{ 'line-through text-gray-400': (selectedItem.deletedAt || selectedItem.deleted_at) }">
           {{ selectedItem.reason }}
         </p>
       </div>
@@ -146,25 +178,25 @@ function getAccountName(accountId: string | number) {
       <div class="space-y-3 text-sm">
         <div class="flex justify-between items-center">
           <span class="text-gray-500 font-medium">Estado</span>
-          <span class="font-bold px-2 py-0.5 rounded-md text-xs uppercase tracking-wide" :class="selectedItem.deletedAt ? 'bg-danger/10 text-danger' : 'bg-income/10 text-income'">
-            {{ selectedItem.deletedAt ? 'Anulado' : 'Completado' }}
+          <span class="font-bold px-2 py-0.5 rounded-md text-xs uppercase tracking-wide" :class="(selectedItem.deletedAt || selectedItem.deleted_at) ? 'bg-amber-100 text-amber-700' : 'bg-income/10 text-income'">
+            {{ (selectedItem.deletedAt || selectedItem.deleted_at) ? 'Desactivado' : 'Activo' }}
           </span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-gray-500 font-medium">Fecha</span>
-          <span class="font-medium text-gray-900">{{ formatDate(selectedItem.createdAt) }}</span>
+          <span class="font-medium text-gray-900">{{ formatDate(selectedItem.date || selectedItem.createdAt || '') }}</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-gray-500 font-medium">Cuenta</span>
-          <span class="font-medium text-gray-900">{{ getAccountName(selectedItem.accountId) }}</span>
+          <span class="font-medium text-gray-900">{{ getAccountName(selectedItem.account_id || selectedItem.accountId) }}</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-gray-500 font-medium">Método de pago</span>
-          <span class="font-medium text-gray-900">{{ paymentLabel(selectedItem.paymentType) }}</span>
+          <span class="font-medium text-gray-900">{{ paymentLabel(selectedItem.payment_method || selectedItem.paymentType) }}</span>
         </div>
-        <div v-if="selectedItem.deletedAt" class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Razón anulación</span>
-          <span class="font-medium text-danger">{{ selectedItem.deleteReason }}</span>
+        <div v-if="selectedItem.deletedAt || selectedItem.deleted_at" class="flex justify-between items-center">
+          <span class="text-gray-500 font-medium">Motivo desactivación</span>
+          <span class="font-medium text-amber-700">{{ selectedItem.deletion_reason || selectedItem.deleteReason || 'Sin especificar' }}</span>
         </div>
       </div>
 
@@ -173,6 +205,17 @@ function getAccountName(accountId: string | number) {
         <p class="text-sm text-gray-700 bg-gray-50 border border-gray-100 p-3 rounded-xl break-words whitespace-pre-wrap leading-relaxed">
           {{ selectedItem.description }}
         </p>
+      </div>
+
+      <div v-if="!selectedItem.deletedAt && !selectedItem.deleted_at" class="pt-2">
+        <button
+          type="button"
+          @click="handleRelocateFromDetail"
+          class="w-full py-2.5 px-3 rounded-xl border border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100/60 font-semibold text-xs flex items-center justify-center gap-1.5 transition"
+        >
+          <Icon icon="lucide:arrow-right-left" class="w-4 h-4" />
+          Trasladar a otra cuenta
+        </button>
       </div>
     </div>
   </AppFormDialog>
