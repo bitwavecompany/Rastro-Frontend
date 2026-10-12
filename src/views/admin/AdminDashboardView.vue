@@ -17,8 +17,8 @@ const {
   premiumUsersCount,
   formatDate,
   timeAgo,
-  fetchUsers,
-  fetchPremiumRequests,
+  refreshDashboard,
+  isRefreshing,
   // Plan toggle
   confirmModalOpen,
   selectedUser,
@@ -121,13 +121,14 @@ const {
           </div>
 
           <button
-            @click="activeTab === 'users' ? fetchUsers() : fetchPremiumRequests()"
+            type="button"
+            @click="refreshDashboard"
             class="text-sm font-medium text-primary flex items-center gap-1.5 hover:underline pb-3 cursor-pointer"
           >
             <Icon
               icon="lucide:refresh-cw"
               class="w-4 h-4"
-              :class="{ 'animate-spin': activeTab === 'users' ? isLoadingUsers : isLoadingRequests }"
+              :class="{ 'animate-spin': isRefreshing }"
             />
             Actualizar
           </button>
@@ -141,6 +142,7 @@ const {
           :format-date="formatDate"
           @toggle-plan="requestPlanToggle"
           @open-cash-modal="openCashModal"
+          @view-pending-request="activeTab = 'requests'"
         />
 
         <!-- TAB 2: COLA DE SOLICITUDES PREMIUM -->

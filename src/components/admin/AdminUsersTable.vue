@@ -10,6 +10,7 @@ defineProps<{
 const emit = defineEmits<{
   togglePlan: [user: Profile]
   openCashModal: [user: Profile]
+  viewPendingRequest: []
 }>()
 </script>
 
@@ -70,6 +71,17 @@ const emit = defineEmits<{
                     <span class="font-semibold text-gray-500">Comprobante:</span> 
                     <span class="font-mono bg-gray-100 px-1 py-0.5 rounded">{{ user.payment_receipt }}</span>
                   </p>
+                  <div v-if="user.plan === 'free' && user.payment_receipt" class="pt-1">
+                    <button
+                      type="button"
+                      @click="emit('viewPendingRequest')"
+                      class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded cursor-pointer transition shadow-xs"
+                      title="Ver en la cola de solicitudes para Aprobar o Rechazar"
+                    >
+                      <Icon icon="lucide:clock" class="w-3 h-3 text-amber-600" />
+                      Solicitud en revisión
+                    </button>
+                  </div>
                 </div>
                 <span v-else class="text-xs text-gray-400 italic">Sin datos registrados</span>
               </td>

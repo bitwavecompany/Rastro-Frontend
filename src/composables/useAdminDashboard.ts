@@ -149,6 +149,7 @@ export function useAdminDashboard() {
       } else {
         toast.success('Plan cambiado a FREE. Correo de notificación (PlanDowngradedMail) enviado al usuario.')
       }
+      await fetchPremiumRequests()
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } }
       toast.error(err.response?.data?.message || 'Error al cambiar el plan')
@@ -191,6 +192,7 @@ export function useAdminDashboard() {
       }
       toast.success('Pago en efectivo registrado. Usuario actualizado a Premium y correo de activación enviado.')
       closeCashModal()
+      await fetchPremiumRequests()
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } }
       toast.error(err.response?.data?.message || 'Error al registrar pago en efectivo')
@@ -206,7 +208,7 @@ export function useAdminDashboard() {
       toast.success('Solicitud aprobada con éxito. Usuario promovido a Premium y correo de activación (PremiumActivatedMail) enviado.')
       req.status = 'approved'
       req.verified_at = new Date().toISOString()
-      fetchUsers()
+      await refreshDashboard()
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } }
       toast.error(err.response?.data?.message || 'Error al aprobar solicitud')
@@ -244,11 +246,23 @@ export function useAdminDashboard() {
       selectedRequest.value.status = 'rejected'
       selectedRequest.value.rejection_reason = rejectionReason.value.trim()
       closeRejectModal()
+      await refreshDashboard()
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } }
       toast.error(err.response?.data?.message || 'Error al rechazar solicitud')
     } finally {
       isSubmittingReject.value = false
+    }
+  }
+
+  const isRefreshing = ref(false)
+
+  async function refreshDashboard() {
+    isRefreshing.value = true
+    try {
+      await Promise.all([fetchUsers(), fetchPremiumRequests()])
+    } finally {
+      isRefreshing.value = false
     }
   }
 
@@ -274,6 +288,8 @@ export function useAdminDashboard() {
     timeAgo,
     fetchUsers,
     fetchPremiumRequests,
+    refreshDashboard,
+    isRefreshing,
     // Plan toggle
     confirmModalOpen,
     selectedUser,
