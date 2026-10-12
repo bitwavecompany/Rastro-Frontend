@@ -8,6 +8,7 @@ import SessionRevokedModal from '@/components/modals/SessionRevokedModal.vue'
 import { useProfileStore } from '@/stores/useProfileStore'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { useSessionStore } from '@/stores/useSessionStore'
 import { useUserProfileQuery } from '@/composables/useUserProfileQuery'
 import { syncEngine } from '@/sync/SyncEngine'
 
@@ -15,6 +16,7 @@ const route = useRoute()
 const profileStore = useProfileStore()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
+const sessionStore = useSessionStore()
 
 // TanStack Query gestiona el estado del perfil con staleTime: 5m y polling cada 60s
 useUserProfileQuery()
@@ -36,6 +38,14 @@ onMounted(async () => {
   // Start background sync
   syncEngine.startAutoSync()
   window.addEventListener('online', () => syncEngine.sync())
+
+  // Sincronización multi-pestaña: si otra pestaña cambia de sesión o cierra sesión,
+  // sincronizar el estado reactivo para prevenir peticiones con tokens cruzados
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'auth_token' && event.newValue !== sessionStore.token) {
+      window.location.reload()
+    }
+  })
 })
 </script>
 

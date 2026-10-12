@@ -154,6 +154,11 @@ function requestDeleteAccount() {
 
 // PRD 10.2: Eliminación en dos pasos (escribir ELIMINAR)
 async function handleDeleteAccount() {
+  if (store.profile.role === 'admin') {
+    toast.error('Las cuentas de administrador no pueden ser eliminadas.')
+    isDeleteAccountModalOpen.value = false
+    return
+  }
   isSubmittingDelete.value = true
   try {
     await authApi.deleteAccount()
@@ -410,7 +415,7 @@ async function handleExportCsv() {
             </button>
 
             <button
-              v-if="!isGuest"
+              v-if="!isGuest && store.profile.role !== 'admin'"
               @click="requestDeleteAccount"
               class="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-danger/20 bg-danger/5 text-sm font-medium text-danger/90 hover:bg-danger/10 transition-colors"
             >
