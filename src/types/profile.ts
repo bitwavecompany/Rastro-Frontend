@@ -6,7 +6,6 @@ export type PremiumRequestStatus = 'pending_verification' | 'approved' | 'reject
 export interface Profile {
   id: string
   name: string
-  alias?: string | null
   email: string | null
   plan: PlanType
   role?: UserRole

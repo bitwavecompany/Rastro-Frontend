@@ -1,6 +1,7 @@
 import { db } from '@/database/db'
 import { syncApi } from '@/api/sync'
 import { ApiPayloadAdapter } from './adapters/ApiPayloadAdapter'
+import { tokenStorage } from '@/services/tokenStorage'
 
 export class SyncEngine {
   private isSyncing = false
@@ -21,11 +22,10 @@ export class SyncEngine {
 
   async sync() {
     if (this.isFrozen || this.isSyncing) return
-    
-    // PRD 7.4: Solo usuarios registrados sincronizan con la nube.
-    // Los datos del Invitado nunca se envían al servidor.
-    const token = localStorage.getItem('auth_token')
-    if (!token) return
+
+    // PRD 7.4: Only registered users sync with the cloud.
+    // Guest data is never transmitted.
+    if (!tokenStorage.hasAccessToken()) return
 
     this.isSyncing = true
 
@@ -48,20 +48,21 @@ export class SyncEngine {
             await db.outbox.delete(entry.seq!)
             if (!['delete', 'hard-delete', 'purge-account'].includes(entry.op)) {
               if (entry.entity === 'accounts') {
-                await db.accounts.update(entry.entityId, { syncStatus: 'synced' })
+                await db.accounts.update(entry.entityId, { sync_status: 'synced' })
               } else if (entry.entity === 'transactions') {
-                await db.transactions.update(entry.entityId, { syncStatus: 'synced' })
+                await db.transactions.update(entry.entityId, { sync_status: 'synced' })
               }
             }
           } else if (result.status === 'error') {
-            // Manejo de Dead Letter Queue para errores permanentes de validación o permisos
-            if ([403, 404, 422].includes(result.code)) {
+            // Handle Dead Letter Queue for permanent validation/entitlement errors
+            const code = result.code ?? 0
+            if ([403, 404, 422].includes(code)) {
               await db.outbox.delete(entry.seq!)
               await db.dlq.add({
                 ...entry,
-                errorCode: result.code,
-                errorMessage: result.message || 'Error desconocido',
-                failedAt: new Date().toISOString()
+                errorCode: code,
+                errorMessage: result.message || 'Unknown error',
+                failedAt: new Date().toISOString(),
               })
 
               import('@/stores/useToastStore').then(({ useToastStore }) => {
@@ -70,15 +71,18 @@ export class SyncEngine {
               })
 
               if (entry.op === 'create') {
-                if (entry.entity === 'accounts') await db.accounts.update(entry.entityId, { syncStatus: 'pending_create' })
-                else if (entry.entity === 'transactions') await db.transactions.update(entry.entityId, { syncStatus: 'pending_create' })
+                if (entry.entity === 'accounts') {
+                  await db.accounts.update(entry.entityId, { sync_status: 'pending_create' })
+                } else if (entry.entity === 'transactions') {
+                  await db.transactions.update(entry.entityId, { sync_status: 'pending_create' })
+                }
               }
             }
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('[SyncEngine] Network/Server Error during Batch Sync', error)
-        // Errores de red 500 no borran el outbox, se reintenta en el próximo ciclo.
+        // Network/500 errors remain in outbox for retry in the next sync cycle.
       }
     } finally {
       this.isSyncing = false

@@ -12,10 +12,10 @@ import RelocateMovementModal from '@/components/transactions/RelocateMovementMod
 import RelocateRestoreWarningModal from '@/components/transactions/RelocateRestoreWarningModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import type { Transaction, CreateTransactionPayload } from '@/types/transaction'
-import type { TransactionKind } from '@/constants/transactions'
+import type { TransactionType } from '@/constants/transactions'
 
 const props = defineProps<{
-  kind: TransactionKind
+  type: TransactionType
 }>()
 
 const router = useRouter()
@@ -24,43 +24,43 @@ const accountsStore = useAccountsStore()
 const entitlementsStore = useEntitlementsStore()
 const toast = useToastStore()
 
-// PRD Regla 10: Banner contextual si no hay cuentas destino disponibles para traslado
+// PRD Rule 10: Contextual banner if no destination accounts are available for relocation
 const relocateBanner = ref<{ text: string; buttonLabel: string; route: string } | null>(null)
 
-// Por defecto los registros desactivados son visibles; la opción de ocultarlos es la variable
+// Deactivated records are visible by default
 const hideDeactivated = ref(false)
 
 const allItems = computed(() =>
-  props.kind === 'expense' ? store.allExpenses : store.allIncomes
+  props.type === 'expense' ? store.allExpenses : store.allIncomes
 )
 
-// PRD 2.2 & 4.3: Los movimientos no tienen límite en ningún plan
+// PRD 2.2 & 4.3: Transactions are unlimited across all plans
 const items = computed(() =>
   hideDeactivated.value
-    ? allItems.value.filter(t => !t.deletedAt && !t.deleted_at)
+    ? allItems.value.filter(t => !t.deleted_at)
     : allItems.value
 )
 
 const deactivatedCount = computed(() =>
-  allItems.value.filter(t => !!(t.deletedAt || t.deleted_at)).length
+  allItems.value.filter(t => !!t.deleted_at).length
 )
 
 const pageTitle = computed(() =>
-  props.kind === 'expense' ? 'Gastos' : 'Ingresos'
+  props.type === 'expense' ? 'Gastos' : 'Ingresos'
 )
 
 const pageSubtitle = computed(() =>
-  props.kind === 'expense'
+  props.type === 'expense'
     ? 'Registra y controla tus gastos'
     : 'Registra y controla tus ingresos'
 )
 
 const deleteModalTitle = computed(() =>
-  props.kind === 'expense' ? 'Desactivar gasto' : 'Desactivar ingreso'
+  props.type === 'expense' ? 'Desactivar gasto' : 'Desactivar ingreso'
 )
 
 const deleteReasonLabel = computed(() =>
-  props.kind === 'expense'
+  props.type === 'expense'
     ? '¿Por qué desactivas este gasto?'
     : '¿Por qué desactivas este ingreso?'
 )
@@ -73,11 +73,11 @@ const error = ref<string | null>(null)
 const deleteConfirm = useDeleteConfirm<Transaction>()
 const hardDeleteConfirm = useDeleteConfirm<Transaction>()
 
-// Estado de traslado (Regla 7)
+// Relocation state (Rule 7)
 const relocatingItem = ref<Transaction | null>(null)
 const isRelocateModalOpen = ref(false)
 
-// Estado de advertencia al reactivar traslado (Regla 9)
+// Warning state when restoring relocated record (Rule 9)
 const restoreWarningItem = ref<Transaction | null>(null)
 const isRestoreWarningOpen = ref(false)
 
@@ -88,18 +88,19 @@ async function handleSubmit(payload: CreateTransactionPayload) {
   try {
     if (editingItem.value) {
       await store.update(editingItem.value.id, payload)
-      toast.success(props.kind === 'expense' ? 'Gasto actualizado' : 'Ingreso actualizado')
+      toast.success(props.type === 'expense' ? 'Gasto actualizado' : 'Ingreso actualizado')
       editingItem.value = null
     } else {
       await store.add(payload)
-      toast.success(props.kind === 'expense' ? 'Gasto registrado' : 'Ingreso registrado')
+      toast.success(props.type === 'expense' ? 'Gasto registrado' : 'Ingreso registrado')
     }
-  } catch (err: any) {
-    if (err.response?.status === 422) {
-      const errors = err.response.data.errors
-      error.value = errors[Object.keys(errors)[0]][0]
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { status?: number; data?: { errors?: Record<string, string[]>; message?: string } }; message?: string }
+    if (errorObj.response?.status === 422 && errorObj.response.data?.errors) {
+      const errs = errorObj.response.data.errors
+      error.value = errs[Object.keys(errs)[0]][0]
     } else {
-      error.value = err.response?.data?.message || err.message || 'Error al guardar el movimiento'
+      error.value = errorObj.response?.data?.message || errorObj.message || 'Error al guardar el movimiento'
     }
     toast.error(error.value as string)
   } finally {
@@ -119,10 +120,10 @@ function handleEditCancel() {
 }
 
 function handleRequestRelocate(item: Transaction) {
-  // PRD Regla 10: La condición de bloqueo es candidateAccounts.length === 0
-  const originAccountId = String(item.account_id || item.accountId)
+  // PRD Rule 10: Block if candidateAccounts.length === 0
+  const originAccountId = item.account_id
   const candidateAccounts = accountsStore.accounts.filter(
-    a => !a.deletedAt && !a.deleted_at && String(a.id) !== originAccountId
+    a => !a.deleted_at && a.id !== originAccountId
   )
 
   if (candidateAccounts.length === 0) {
@@ -130,13 +131,13 @@ function handleRequestRelocate(item: Transaction) {
       relocateBanner.value = {
         text: 'Necesitas al menos una cuenta destino disponible para realizar traslados. Regístrate gratis para crear más cuentas.',
         buttonLabel: 'Regístrate gratis',
-        route: '/register'
+        route: '/register',
       }
     } else {
       relocateBanner.value = {
         text: 'Necesitas al menos una cuenta destino disponible para realizar traslados. Crea una nueva cuenta primero.',
         buttonLabel: 'Crear cuenta',
-        route: '/accounts'
+        route: '/accounts',
       }
     }
     return
@@ -147,15 +148,16 @@ function handleRequestRelocate(item: Transaction) {
   isRelocateModalOpen.value = true
 }
 
-async function handleRelocateConfirm(payload: { destinationAccountId: string | number; reason: string }) {
+async function handleRelocateConfirm(payload: { destinationAccountId: string; reason: string }) {
   if (!relocatingItem.value) return
   try {
     await store.relocate(relocatingItem.value.id, payload.destinationAccountId, payload.reason)
-    toast.success(props.kind === 'expense' ? 'Gasto trasladado exitosamente' : 'Ingreso trasladado exitosamente')
+    toast.success(props.type === 'expense' ? 'Gasto trasladado exitosamente' : 'Ingreso trasladado exitosamente')
     isRelocateModalOpen.value = false
     relocatingItem.value = null
-  } catch (err: any) {
-    toast.error(err.message || 'Error al trasladar el movimiento')
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string }
+    toast.error(errorObj.message || 'Error al trasladar el movimiento')
   }
 }
 
@@ -164,16 +166,17 @@ async function handleDeleteConfirm(reason?: string) {
   if (editingItem.value?.id === deleteConfirm.target.value.id) editingItem.value = null
   try {
     await store.remove(deleteConfirm.target.value.id, reason)
-    toast.success(props.kind === 'expense' ? 'Gasto desactivado' : 'Ingreso desactivado')
-  } catch (err: any) {
-    const msg = err.response?.data?.message || err.message || 'Error al desactivar el registro'
+    toast.success(props.type === 'expense' ? 'Gasto desactivado' : 'Ingreso desactivado')
+  } catch (err: unknown) {
+    const errorObj = err as { response?: { data?: { message?: string } }; message?: string }
+    const msg = errorObj.response?.data?.message || errorObj.message || 'Error al desactivar el registro'
     toast.error(msg)
   } finally {
     deleteConfirm.cancel()
   }
 }
 
-// PRD Regla 9: Advertencia al reactivar un registro trasladado
+// PRD Rule 9: Warning when reactivating a relocated transaction
 async function handleRestore(item: Transaction) {
   if (store.isRelocated(item)) {
     restoreWarningItem.value = item
@@ -186,9 +189,10 @@ async function handleRestore(item: Transaction) {
 async function executeRestore(item: Transaction) {
   try {
     await store.restore(item.id)
-    toast.success(props.kind === 'expense' ? 'Gasto reactivado' : 'Ingreso reactivado')
-  } catch (err: any) {
-    toast.error(err.message || 'Error al reactivar el registro')
+    toast.success(props.type === 'expense' ? 'Gasto reactivado' : 'Ingreso reactivado')
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string }
+    toast.error(errorObj.message || 'Error al reactivar el registro')
   } finally {
     isRestoreWarningOpen.value = false
     restoreWarningItem.value = null
@@ -210,8 +214,9 @@ async function handleHardDeleteConfirm() {
   try {
     await store.hardDelete(hardDeleteConfirm.target.value.id)
     toast.success('Movimiento eliminado permanentemente')
-  } catch (err: any) {
-    toast.error(err.message || 'Error al eliminar el registro')
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string }
+    toast.error(errorObj.message || 'Error al eliminar el registro')
   } finally {
     hardDeleteConfirm.cancel()
   }
@@ -235,7 +240,7 @@ async function handleHardDeleteConfirm() {
         {{ error }}
       </div>
 
-      <!-- PRD Regla 10: Banner contextual sin cuenta destino para traslado -->
+      <!-- PRD Rule 10: Contextual banner without destination accounts -->
       <div
         v-if="relocateBanner"
         class="p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200"
@@ -265,7 +270,7 @@ async function handleHardDeleteConfirm() {
 
       <div ref="formRef">
         <TransactionForm
-          :kind="kind"
+          :type="type"
           :disabled="isSubmitting"
           :editing-item="editingItem"
           @submit="handleSubmit"
@@ -274,7 +279,7 @@ async function handleHardDeleteConfirm() {
       </div>
 
       <TransactionList
-        :kind="kind"
+        :type="type"
         :items="items"
         :deactivated-count="deactivatedCount"
         v-model:hide-deactivated="hideDeactivated"
@@ -288,14 +293,14 @@ async function handleHardDeleteConfirm() {
     </div>
   </div>
 
-  <!-- Modal Trasladar Movimiento (PRD Regla 7) -->
+  <!-- Relocate Modal (PRD Rule 7) -->
   <RelocateMovementModal
     v-model:open="isRelocateModalOpen"
     :transaction="relocatingItem"
     @confirm="handleRelocateConfirm"
   />
 
-  <!-- Modal Advertencia Reactivación de Traslado (PRD Regla 9) -->
+  <!-- Relocate Warning Modal (PRD Rule 9) -->
   <RelocateRestoreWarningModal
     v-model:open="isRestoreWarningOpen"
     :transaction="restoreWarningItem"
@@ -303,7 +308,7 @@ async function handleHardDeleteConfirm() {
     @cancel="() => { isRestoreWarningOpen = false; restoreWarningItem = null }"
   />
 
-  <!-- Modal Soft Delete -->
+  <!-- Soft Delete Modal -->
   <AppModal
     v-model:open="deleteConfirm.isOpen.value"
     :title="deleteModalTitle"
@@ -318,7 +323,7 @@ async function handleHardDeleteConfirm() {
     @cancel="deleteConfirm.cancel"
   />
 
-  <!-- Modal Hard Delete (PRD 6.2) -->
+  <!-- Hard Delete Modal (PRD 6.2) -->
   <AppModal
     v-model:open="hardDeleteConfirm.isOpen.value"
     title="Eliminar permanentemente"

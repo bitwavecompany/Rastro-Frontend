@@ -1,5 +1,5 @@
-export const PAYMENT_TYPES = ['cash', 'transfer'] as const;
-export type PaymentType = typeof PAYMENT_TYPES[number];
+export const PAYMENT_METHODS = ['cash', 'transfer'] as const
+export type PaymentMethod = typeof PAYMENT_METHODS[number]
 
-export const TRANSACTION_KINDS = ['expense', 'income'] as const;
-export type TransactionKind = typeof TRANSACTION_KINDS[number];
+export const TRANSACTION_TYPES = ['expense', 'income'] as const
+export type TransactionType = typeof TRANSACTION_TYPES[number]

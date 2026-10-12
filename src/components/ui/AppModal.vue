@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -10,6 +10,7 @@ const props = withDefaults(
     cancelLabel?: string
     variant?: 'default' | 'danger' | 'warning'
     confirmDisabled?: boolean
+    loading?: boolean
     requireReason?: boolean
     reasonLabel?: string
     reasonPlaceholder?: string
@@ -18,6 +19,8 @@ const props = withDefaults(
     confirmLabel: 'Confirmar',
     cancelLabel: 'Cancelar',
     variant: 'default',
+    confirmDisabled: false,
+    loading: false,
     requireReason: false,
   }
 )
@@ -27,8 +30,6 @@ const emit = defineEmits<{
   confirm: [reason?: string]
   cancel: []
 }>()
-
-import { ref } from 'vue'
 
 const reason = ref('')
 const reasonError = ref('')
@@ -41,6 +42,7 @@ watch(() => props.open, (val) => {
 })
 
 function handleConfirm() {
+  if (props.loading || props.confirmDisabled) return
   if (props.requireReason && !reason.value.trim()) {
     reasonError.value = 'Este campo es obligatorio'
     return
@@ -50,6 +52,7 @@ function handleConfirm() {
 }
 
 function handleCancel() {
+  if (props.loading) return
   emit('cancel')
   emit('update:open', false)
 }
@@ -131,22 +134,24 @@ function handleCancel() {
             <div class="px-6 pb-6 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
               <button
                 @click="handleCancel"
+                :disabled="loading"
                 class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-medium border border-gray-200
-                       text-gray-600 hover:bg-gray-100 transition-colors"
+                       text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {{ cancelLabel }}
               </button>
               <button
                 @click="handleConfirm"
-                :disabled="confirmDisabled"
-                class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="confirmDisabled || loading"
+                class="w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                 :class="variant === 'danger'
                   ? 'bg-danger text-white hover:bg-danger/90 active:bg-danger/80'
                   : variant === 'warning'
                     ? 'bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800'
                     : 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'"
               >
-                {{ confirmLabel }}
+                <Icon v-if="loading" icon="lucide:loader-2" class="w-4 h-4 animate-spin shrink-0" />
+                <span>{{ confirmLabel }}</span>
               </button>
             </div>
           </div>

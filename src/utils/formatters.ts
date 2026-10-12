@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import 'dayjs/locale/es'
-import type { PaymentType } from '@/constants/transactions'
+import type { PaymentMethod } from '@/constants/transactions'
 import type { AccountType } from '@/constants/accounts'
 
 dayjs.locale('es')
@@ -17,12 +17,12 @@ export function formatDate(iso?: string | null): string {
   return dayjs(iso).locale('es').format('DD MMM YYYY').toLowerCase()
 }
 
-export function paymentLabel(type: PaymentType): string {
-  return type === 'cash' ? 'Efectivo' : 'Transferencia'
+export function paymentLabel(method: PaymentMethod): string {
+  return method === 'cash' ? 'Efectivo' : 'Transferencia'
 }
 
-export function paymentIcon(type: PaymentType): string {
-  return type === 'cash' ? 'lucide:banknote' : 'lucide:arrow-right-left'
+export function paymentIcon(method: PaymentMethod): string {
+  return method === 'cash' ? 'lucide:banknote' : 'lucide:arrow-right-left'
 }
 
 export function getAccountIcon(type: AccountType): string {

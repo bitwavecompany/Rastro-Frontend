@@ -50,14 +50,15 @@ async function handleLogin() {
     toast.success('¡Bienvenido Administrador!')
     router.push('/admin/dashboard')
 
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      const errors = error.response.data.errors
-      errorMsg.value = errors[Object.keys(errors)[0]][0]
-    } else if (error.response?.status === 401 || error.response?.status === 404) {
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } }
+    if (err.response?.status === 422) {
+      const errors = err.response.data?.errors
+      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : err.response.data?.message || 'Error de validación'
+    } else if (err.response?.status === 401 || err.response?.status === 404) {
       errorMsg.value = 'Credenciales incorrectas'
     } else {
-      errorMsg.value = error.response?.data?.message || 'Error al conectar con el servidor'
+      errorMsg.value = err.response?.data?.message || 'Error al conectar con el servidor'
     }
   } finally {
     isLoading.value = false

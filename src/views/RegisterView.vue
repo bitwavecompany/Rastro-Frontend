@@ -2,20 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/useToastStore'
-import { useProfileStore } from '@/stores/useProfileStore'
-import { useSessionStore } from '@/stores/useSessionStore'
-import { useAccountsStore } from '@/stores/useAccountsStore'
-import { useTransactionsStore } from '@/stores/useTransactionsStore'
-import { db } from '@/database/db'
-import api from '@/api/axios'
-import { syncEngine } from '@/sync/SyncEngine'
+import { authApi } from '@/api/auth'
+import { authMergeService } from '@/services/authMergeService'
 
 const router = useRouter()
 const toast = useToastStore()
-const profileStore = useProfileStore()
-const sessionStore = useSessionStore()
-const accountsStore = useAccountsStore()
-const transactionsStore = useTransactionsStore()
 
 const form = ref({ name: '', email: '', password: '' })
 const isLoading = ref(false)
@@ -31,89 +22,37 @@ async function handleRegister() {
   errorMsg.value = ''
 
   try {
-    const accounts = await db.accounts.toArray()
-    const transactions = await db.transactions.toArray()
+    const { accounts: cleanAccounts, transactions: cleanTransactions } =
+      await authMergeService.prepareGuestDataForRegistration()
 
-    const cleanAccounts = accounts.map(({ syncStatus, updatedAt, updated_at, ownerId, user_id, ...rest }) => ({
-      ...rest,
-      amount: Number(rest.amount ?? rest.initial_balance ?? 0),
-      initial_balance: Number(rest.initial_balance ?? rest.amount ?? 0),
-      currency: rest.currency || 'USD',
-      is_default: Boolean(rest.is_default)
-    }))
-
-    const cleanTransactions = transactions.map(({ syncStatus, updatedAt, updated_at, ownerId, user_id, ...rest }) => ({
-      ...rest,
-      amount: Number(rest.amount),
-      kind: rest.kind || rest.type || 'expense',
-      type: rest.type || rest.kind || 'expense',
-      paymentType: rest.paymentType || rest.payment_method || 'cash',
-      payment_method: rest.payment_method || rest.paymentType || 'cash',
-      accountId: rest.accountId || rest.account_id,
-      account_id: rest.account_id || rest.accountId,
-      date: rest.date || rest.createdAt || new Date().toISOString()
-    }))
-
-    const response = await api.post('/auth/register-sync', {
+    const response = await authApi.registerSync({
       name: form.value.name.trim(),
       email: form.value.email.trim(),
       password: form.value.password,
-      localData: { accounts: cleanAccounts, transactions: cleanTransactions }
+      device_name: 'Web Browser',
+      localData: { accounts: cleanAccounts, transactions: cleanTransactions },
     })
 
     const { token, refresh_token: refreshToken, user, syncedData } = response.data.data
 
-    sessionStore.setTokens(token, refreshToken)
-    syncEngine.resume()
-
-    await profileStore.setProfileLocally({
-      id: String(user.id),
-      name: user.name || user.alias,
-      email: user.email,
-      plan: user.plan || 'free'
+    await authMergeService.completeRegistrationSync({
+      token,
+      refreshToken,
+      user,
+      syncedAccounts: syncedData?.accounts || [],
+      syncedTransactions: syncedData?.transactions || [],
     })
-
-    await db.accounts.clear()
-    await db.transactions.clear()
-    await db.outbox.clear()
-
-    if (syncedData.accounts && syncedData.accounts.length > 0) {
-      await db.accounts.bulkAdd(syncedData.accounts.map((a: any) => ({
-        ...a,
-        amount: Number(a.amount ?? a.initial_balance ?? 0),
-        initial_balance: Number(a.initial_balance ?? a.amount ?? 0),
-        syncStatus: 'synced'
-      })))
-    }
-    if (syncedData.transactions && syncedData.transactions.length > 0) {
-      await db.transactions.bulkAdd(syncedData.transactions.map((t: any) => ({
-        ...t,
-        kind: t.kind || t.type,
-        type: t.type || t.kind,
-        paymentType: t.paymentType || t.payment_method,
-        payment_method: t.payment_method || t.paymentType,
-        accountId: t.accountId || t.account_id,
-        account_id: t.account_id || t.accountId,
-        date: t.date || t.createdAt,
-        syncStatus: 'synced'
-      })))
-    }
-
-    await Promise.all([
-      accountsStore.load(),
-      transactionsStore.load(),
-      profileStore.load()
-    ])
 
     toast.success('¡Registro y sincronización exitosos!')
     router.push('/')
 
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      const errors = error.response.data.errors
-      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : error.response.data.message
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } }
+    if (err.response?.status === 422) {
+      const errors = err.response.data?.errors
+      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : err.response.data?.message || 'Error de validación'
     } else {
-      errorMsg.value = error.response?.data?.message || 'Error al conectar con el servidor'
+      errorMsg.value = err.response?.data?.message || 'Error al conectar con el servidor'
     }
   } finally {
     isLoading.value = false

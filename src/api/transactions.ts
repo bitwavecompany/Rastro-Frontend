@@ -2,8 +2,7 @@ import api from './axios'
 
 export interface GetTransactionsParams {
   type?: 'income' | 'expense'
-  kind?: 'income' | 'expense'
-  account_id?: string | number
+  account_id?: string
   active_only?: boolean
   page?: number
   per_page?: number

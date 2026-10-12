@@ -2,23 +2,14 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/useToastStore'
-import { useProfileStore } from '@/stores/useProfileStore'
-import { useSessionStore } from '@/stores/useSessionStore'
-import { useAccountsStore } from '@/stores/useAccountsStore'
-import { useTransactionsStore } from '@/stores/useTransactionsStore'
-import { db } from '@/database/db'
+import { authApi } from '@/api/auth'
+import { authMergeService, type AuthUser, type CloudAccountRaw, type CloudTransactionRaw } from '@/services/authMergeService'
 import api from '@/api/axios'
-import { syncEngine } from '@/sync/SyncEngine'
-import { toPlainObject } from '@/utils/clone'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 
 const router = useRouter()
 const toast = useToastStore()
-const profileStore = useProfileStore()
-const sessionStore = useSessionStore()
-const accountsStore = useAccountsStore()
-const transactionsStore = useTransactionsStore()
 
 const form = ref({ email: '', password: '' })
 const isLoading = ref(false)
@@ -35,7 +26,13 @@ const isPremiumUpgradeModalOpen = ref(false)
 const isSubmittingUpgrade = ref(false)
 const premiumBank = ref('')
 const premiumReceipt = ref('')
-const pendingSession = ref<{ token: string; refreshToken?: string; user: any; accountsData: any[]; transactionsData: any[] } | null>(null)
+const pendingSession = ref<{
+  token: string
+  refreshToken?: string
+  user: AuthUser
+  accountsData: CloudAccountRaw[]
+  transactionsData: CloudTransactionRaw[]
+} | null>(null)
 
 async function handleLogin(force = false) {
   if (!form.value.email || !form.value.password) {
@@ -47,16 +44,13 @@ async function handleLogin(force = false) {
   errorMsg.value = ''
 
   try {
-    const payload: any = {
+    const response = await authApi.login({
       email: form.value.email.trim(),
       password: form.value.password,
-      device_name: 'Web Browser'
-    }
-    if (force) {
-      payload.force = true
-    }
+      device_name: 'Web Browser',
+      force,
+    })
 
-    const response = await api.post('/auth/login', payload)
     const { token, refresh_token: refreshToken, user } = response.data.data
 
     // Consultar datos de la nube con el token obtenido
@@ -65,173 +59,68 @@ async function handleLogin(force = false) {
       api.get('/transactions', { headers: { Authorization: `Bearer ${token}` } })
     ])
 
-    const cloudAccounts: any[] = accountsRes.data.data || []
-    const cloudTransactions: any[] = transactionsRes.data.data || []
+    const cloudAccounts: CloudAccountRaw[] = (accountsRes.data.data as CloudAccountRaw[]) || []
+    const cloudTransactions: CloudTransactionRaw[] = (transactionsRes.data.data as CloudTransactionRaw[]) || []
 
-    // Evaluar cuentas activas locales vs cuentas activas en nube (PRD 9.1)
-    const localAccounts = await db.accounts.filter(a => !a.deletedAt && !a.deleted_at).toArray()
-    const cloudActiveAccounts = cloudAccounts.filter(a => !a.deleted_at && !a.deletedAt)
+    const collision = await authMergeService.checkLoginCollision({
+      user,
+      cloudAccounts,
+    })
 
-    // La cuenta por defecto "Efectivo" se fusiona, solo las adicionales ocupan nuevo slot
-    const localNonDefault = localAccounts.filter(a => !a.is_default && a.name !== 'Efectivo')
-    const totalActiveAccounts = cloudActiveAccounts.length + localNonDefault.length
-    const planLimit = user.plan === 'premium' ? Infinity : 3
-
-    if (totalActiveAccounts > planLimit) {
-      // Bloquear merge y mostrar modal de colisión
+    if (collision.hasCollision) {
       pendingSession.value = {
         token,
         refreshToken,
         user,
         accountsData: cloudAccounts,
-        transactionsData: cloudTransactions
+        transactionsData: cloudTransactions,
       }
       isCollisionModalOpen.value = true
       return
     }
 
     // Merge automático permitido
-    await completeLoginWithMerge(token, refreshToken, user, cloudAccounts, cloudTransactions)
+    await authMergeService.completeLoginWithMerge({
+      token,
+      refreshToken,
+      user,
+      cloudAccounts,
+      cloudTransactions,
+    })
 
-  } catch (error: any) {
-    if (error.response?.status === 409 || error.response?.data?.code === 'SESSION_LIMIT_REACHED') {
+    toast.success('¡Inicio de sesión exitoso y datos fusionados!')
+    router.push('/')
+
+  } catch (error: unknown) {
+    const err = error as {
+      response?: {
+        status?: number
+        data?: {
+          code?: string
+          message?: string
+          errors?: Record<string, string[]>
+        }
+      }
+    }
+    if (err.response?.status === 409 || err.response?.data?.code === 'SESSION_LIMIT_REACHED') {
       isSessionConflictModalOpen.value = true
-    } else if (error.response?.status === 422) {
-      const errors = error.response.data.errors
-      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : error.response.data.message
-    } else if (error.response?.status === 401 || error.response?.status === 404) {
+    } else if (err.response?.status === 422) {
+      const errors = err.response.data?.errors
+      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : (err.response?.data?.message || 'Error de validación')
+    } else if (err.response?.status === 401 || err.response?.status === 404) {
       errorMsg.value = 'Credenciales incorrectas'
     } else {
-      errorMsg.value = error.response?.data?.message || 'Error al conectar con el servidor'
+      errorMsg.value = err.response?.data?.message || 'Error al conectar con el servidor'
     }
   } finally {
     isLoading.value = false
   }
 }
 
-async function completeLoginWithMerge(token: string, refreshToken: string | undefined, user: any, cloudAccounts: any[], cloudTransactions: any[]) {
-  sessionStore.setTokens(token, refreshToken)
-  syncEngine.resume()
-
-  await profileStore.setProfileLocally({
-    id: String(user.id),
-    name: user.name || user.alias,
-    email: user.email,
-    plan: user.plan || 'free',
-    payment_method: user.payment_method,
-    payment_bank: user.payment_bank,
-    payment_receipt: user.payment_receipt
-  })
-
-  let localAccounts = await db.accounts.filter(a => a.syncStatus === 'pending_create').toArray()
-  let localTransactions = await db.transactions.filter(t => t.syncStatus === 'pending_create').toArray()
-
-  // Fusionar cuenta por defecto "Efectivo"
-  const backendDefault = cloudAccounts.find(a => (a.is_default || a.name === 'Efectivo') && a.type === 'cash')
-  const guestDefault = localAccounts.find(a => a.is_default || (a.name === 'Efectivo' && a.type === 'cash'))
-
-  if (backendDefault && guestDefault) {
-    // Re-mapear transacciones locales hacia la cuenta cloud
-    localTransactions.forEach(t => {
-      if (String(t.accountId || t.account_id) === String(guestDefault.id)) {
-        t.accountId = backendDefault.id
-        t.account_id = backendDefault.id
-      }
-    })
-
-    // Descartar cuenta Efectivo duplicada del invitado
-    localAccounts = localAccounts.filter(a => a.id !== guestDefault.id)
-
-    // Limpiar outbox
-    const outboxEntries = await db.outbox.toArray()
-    for (const entry of outboxEntries) {
-      if (entry.entity === 'accounts' && entry.entityId === guestDefault.id) {
-        await db.outbox.delete(entry.seq!)
-      }
-      if (entry.entity === 'transactions' && (entry.payload?.accountId === guestDefault.id || entry.payload?.account_id === guestDefault.id)) {
-        entry.payload.accountId = backendDefault.id
-        entry.payload.account_id = backendDefault.id
-        await db.outbox.put(entry)
-      }
-    }
-  }
-
-  await db.accounts.clear()
-  await db.transactions.clear()
-
-  // 1. Guardar datos del servidor
-  if (cloudAccounts.length > 0) {
-    await db.accounts.bulkAdd(cloudAccounts.map(a => ({
-      ...a,
-      amount: Number(a.amount ?? a.initial_balance ?? 0),
-      initial_balance: Number(a.initial_balance ?? a.amount ?? 0),
-      syncStatus: 'synced'
-    })))
-  }
-  if (cloudTransactions.length > 0) {
-    await db.transactions.bulkAdd(cloudTransactions.map(t => ({
-      ...t,
-      kind: t.kind || t.type,
-      type: t.type || t.kind,
-      paymentType: t.paymentType || t.payment_method,
-      payment_method: t.payment_method || t.paymentType,
-      accountId: t.accountId || t.account_id,
-      account_id: t.account_id || t.accountId,
-      date: t.date || t.createdAt,
-      syncStatus: 'synced'
-    })))
-  }
-
-  // 2. Restaurar datos locales para que se suban al servidor vía SyncEngine
-  if (localAccounts.length > 0) {
-    for (const a of localAccounts) await db.accounts.put(toPlainObject(a))
-  }
-  if (localTransactions.length > 0) {
-    for (const t of localTransactions) await db.transactions.put(toPlainObject(t))
-  }
-
-  await Promise.all([
-    accountsStore.load(),
-    transactionsStore.load(),
-    profileStore.load()
-  ])
-
-  toast.success('¡Inicio de sesión exitoso y datos fusionados!')
-  router.push('/')
-}
-
 // PRD 9.1 - Opción 1: Descartar datos locales
 async function handleDiscardLocalData() {
   if (!pendingSession.value) return
-  const { token, refreshToken, user, accountsData, transactionsData } = pendingSession.value
-
-  sessionStore.setTokens(token, refreshToken)
-  syncEngine.resume()
-
-  await profileStore.setProfileLocally({
-    id: String(user.id),
-    name: user.name || user.alias,
-    email: user.email,
-    plan: user.plan || 'free'
-  })
-
-  await db.accounts.clear()
-  await db.transactions.clear()
-  await db.outbox.clear()
-
-  if (accountsData.length > 0) {
-    await db.accounts.bulkAdd(accountsData.map(a => ({ ...a, syncStatus: 'synced' })))
-  }
-  if (transactionsData.length > 0) {
-    await db.transactions.bulkAdd(transactionsData.map(t => ({ ...t, syncStatus: 'synced' })))
-  }
-
-  await Promise.all([
-    accountsStore.load(),
-    transactionsStore.load(),
-    profileStore.load()
-  ])
-
+  await authMergeService.discardLocalData(pendingSession.value)
   isCollisionModalOpen.value = false
   pendingSession.value = null
   toast.success('Iniciaste sesión con los datos de la nube')
@@ -275,8 +164,9 @@ async function handleSubmitPremiumFromCollision() {
     toast.info('Tu solicitud fue recibida. Permaneces como Invitado mientras se verifica el pago.', 6000)
     isPremiumUpgradeModalOpen.value = false
     pendingSession.value = null
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Error al enviar comprobante')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err.response?.data?.message || 'Error al enviar comprobante')
   } finally {
     isSubmittingUpgrade.value = false
   }

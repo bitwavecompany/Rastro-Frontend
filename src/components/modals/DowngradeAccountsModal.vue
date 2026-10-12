@@ -6,6 +6,7 @@ import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useSessionStore } from '@/stores/useSessionStore'
 import { useToastStore } from '@/stores/useToastStore'
 import { authApi } from '@/api/auth'
+import type { Account } from '@/types/account'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 
@@ -15,17 +16,17 @@ const accountsStore = useAccountsStore()
 const sessionStore = useSessionStore()
 const toast = useToastStore()
 
-const isDeactivatingId = ref<string | number | null>(null)
+const isDeactivatingId = ref<string | null>(null)
 
 // PRD 9.4: Solo aplica si el usuario está registrado en plan Free y tiene más de 3 cuentas activas
 const isDowngradedWithExcessAccounts = computed(() => {
   if (profileStore.profile.plan !== 'free') return false
-  const activeCount = accountsStore.accounts.filter(a => !a.deletedAt && !a.deleted_at).length
+  const activeCount = accountsStore.accounts.filter(a => !a.deleted_at).length
   return activeCount > 3
 })
 
 const activeAccounts = computed(() => {
-  return accountsStore.accounts.filter(a => !a.deletedAt && !a.deleted_at)
+  return accountsStore.accounts.filter(a => !a.deleted_at)
 })
 
 const excessCount = computed(() => {
@@ -33,24 +34,25 @@ const excessCount = computed(() => {
 })
 
 // Regla 20: Desactivar con plan_downgrade
-async function handleDeactivate(accountId: string | number) {
+async function handleDeactivate(accountId: string) {
   try {
     isDeactivatingId.value = accountId
     await accountsStore.remove(accountId, 'plan_downgrade')
     toast.success('Cuenta desactivada exitosamente')
-  } catch (error: any) {
-    toast.error(error?.message || 'Error al desactivar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err?.message || 'Error al desactivar la cuenta')
   } finally {
     isDeactivatingId.value = null
   }
 }
 
 // Regla 20: Eliminar permanentemente (hard delete directo)
-const accountToHardDelete = ref<any | null>(null)
+const accountToHardDelete = ref<Account | null>(null)
 const isHardDeleteModalOpen = ref(false)
 const isHardDeleting = ref(false)
 
-function openHardDeleteConfirm(acc: any) {
+function openHardDeleteConfirm(acc: Account) {
   accountToHardDelete.value = acc
   isHardDeleteModalOpen.value = true
 }
@@ -63,8 +65,9 @@ async function handleConfirmHardDelete() {
     toast.success('Cuenta y movimientos eliminados permanentemente')
     isHardDeleteModalOpen.value = false
     accountToHardDelete.value = null
-  } catch (error: any) {
-    toast.error(error?.message || 'Error al eliminar la cuenta permanentemente')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err?.message || 'Error al eliminar la cuenta permanentemente')
   } finally {
     isHardDeleting.value = false
   }
@@ -98,8 +101,9 @@ async function handleDeleteAccount() {
     await profileStore.clearAllLocalData()
     toast.success('Cuenta eliminada permanentemente')
     router.push('/register')
-  } catch (error: any) {
-    toast.error(error?.response?.data?.message || 'Error al eliminar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err?.response?.data?.message || 'Error al eliminar la cuenta')
   } finally {
     isDeletingAccount.value = false
     isDeleteAccountConfirmOpen.value = false
@@ -128,8 +132,9 @@ async function handleSubmitUpgrade() {
     isUpgradePending.value = true
     isUpgradeModalOpen.value = false
     toast.info('Tu solicitud está en revisión (máx. 24h).')
-  } catch (error: any) {
-    toast.error(error?.response?.data?.message || 'Error al enviar comprobante')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err?.response?.data?.message || 'Error al enviar comprobante')
   } finally {
     isSubmittingUpgrade.value = false
   }

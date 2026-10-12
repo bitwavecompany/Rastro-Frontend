@@ -6,7 +6,7 @@ import { useEntitlementsStore } from '@/stores/useEntitlementsStore'
 import { formatAmount, formatDate } from '@/utils/formatters'
 import AppModal from '@/components/ui/AppModal.vue'
 import type { Transaction } from '@/types/transaction'
-import type { PaymentType } from '@/constants/transactions'
+import type { PaymentMethod } from '@/constants/transactions'
 
 const props = defineProps<{
   open: boolean
@@ -15,62 +15,60 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [val: boolean]
-  confirm: [payload: { destinationAccountId: string | number; reason: string }]
+  confirm: [payload: { destinationAccountId: string; reason: string }]
 }>()
 
 const router = useRouter()
 const accountsStore = useAccountsStore()
 const entitlements = useEntitlementsStore()
 
-const paymentType = ref<PaymentType>('cash')
-const destinationAccountId = ref<string | number>('')
+const payment_method = ref<PaymentMethod>('cash')
+const destinationAccountId = ref<string>('')
 const reason = ref('')
 const error = ref<string | null>(null)
 
-// Cuenta origen
+// Origin account
 const originAccount = computed(() => {
   if (!props.transaction) return null
-  const accId = props.transaction.account_id || props.transaction.accountId
-  return accountsStore._rawAccounts.find(a => String(a.id) === String(accId)) ?? null
+  const accId = props.transaction.account_id
+  return accountsStore.getAccountById(accId) ?? null
 })
 
-// Cuentas distintas a la de origen
+// Accounts other than origin
 const otherAccounts = computed(() => {
   if (!props.transaction) return []
-  const accId = props.transaction.account_id || props.transaction.accountId
-  return accountsStore.accounts.filter(a => String(a.id) !== String(accId))
+  const accId = props.transaction.account_id
+  return accountsStore.accounts.filter(a => a.id !== accId)
 })
 
-// Regla 1: El método de pago filtra las cuentas destino disponibles
-const targetAccountType = computed(() => paymentType.value === 'cash' ? 'cash' : 'bank')
+// Rule 1: Payment method filters available destination accounts
+const targetAccountType = computed(() => payment_method.value === 'cash' ? 'cash' : 'bank')
 const availableDestinationAccounts = computed(() => {
   return otherAccounts.value.filter(a => a.type === targetAccountType.value)
 })
 
-// Cuenta destino seleccionada
+// Selected destination account
 const selectedDestinationAccount = computed(() => {
-  return availableDestinationAccounts.value.find(a => String(a.id) === String(destinationAccountId.value)) ?? null
+  return availableDestinationAccounts.value.find(a => a.id === destinationAccountId.value) ?? null
 })
 
-// Inicializar selección al abrir o cambiar de método
+// Initialize selection on open or method change
 watch(
   () => [props.open, props.transaction] as const,
   ([isOpen, tx]) => {
     if (isOpen && tx) {
       reason.value = ''
       error.value = null
-      // Sugerir el método opuesto o el que tenga cuentas disponibles
-      const currentMethod = tx.payment_method || tx.paymentType || 'cash'
-      // Si hay cuentas en el método actual que no sean la de origen, conservarlo, sino cambiar
+      const currentMethod = tx.payment_method || 'cash'
       const accountsSameType = otherAccounts.value.filter(
         a => a.type === (currentMethod === 'cash' ? 'cash' : 'bank')
       )
       if (accountsSameType.length > 0) {
-        paymentType.value = currentMethod
+        payment_method.value = currentMethod
         destinationAccountId.value = accountsSameType[0].id
       } else {
-        const alternateMethod: PaymentType = currentMethod === 'cash' ? 'transfer' : 'cash'
-        paymentType.value = alternateMethod
+        const alternateMethod: PaymentMethod = currentMethod === 'cash' ? 'transfer' : 'cash'
+        payment_method.value = alternateMethod
         const accountsAlt = otherAccounts.value.filter(
           a => a.type === (alternateMethod === 'cash' ? 'cash' : 'bank')
         )
@@ -84,54 +82,56 @@ watch(
 watch(
   availableDestinationAccounts,
   (newAccounts) => {
-    const isValid = newAccounts.some(a => String(a.id) === String(destinationAccountId.value))
+    const isValid = newAccounts.some(a => a.id === destinationAccountId.value)
     if (!isValid) {
       destinationAccountId.value = newAccounts.length > 0 ? newAccounts[0].id : ''
     }
   }
 )
 
-// Regla 2: Mensaje de conversión contextual cuando no hay cuentas destino para ese método
+// Rule 2: Contextual CTA when destination accounts are empty
 const emptyDestinationMessage = computed(() => {
   if (otherAccounts.value.length === 0) {
     if (entitlements.isGuest) {
       return {
         text: 'Necesitas al menos dos cuentas para realizar traslados. Regístrate gratis para crear más cuentas.',
         actionLabel: 'Crear cuenta gratis',
-        actionRoute: '/register'
+        actionRoute: '/register',
       }
     } else {
       return {
         text: 'Necesitas al menos dos cuentas para realizar traslados. Crea una nueva cuenta primero.',
         actionLabel: 'Crear cuenta',
-        actionRoute: '/accounts'
+        actionRoute: '/accounts',
       }
     }
   }
 
-  if (availableDestinationAccounts.value.length > 0) return null
-
-  if (paymentType.value === 'transfer') {
-    if (entitlements.isGuest) {
-      return {
-        text: 'Necesitas una cuenta bancaria para registrar transferencias. Regístrate gratis para crearla.',
-        actionLabel: 'Crear cuenta gratis',
-        actionRoute: '/register'
+  if (availableDestinationAccounts.value.length === 0) {
+    if (payment_method.value === 'transfer') {
+      if (entitlements.isGuest) {
+        return {
+          text: 'No tienes cuentas bancarias para recibir transferencias. Regístrate gratis para crear cuentas bancarias.',
+          actionLabel: 'Crear cuenta gratis',
+          actionRoute: '/register',
+        }
+      } else {
+        return {
+          text: 'No tienes cuentas bancarias activas disponibles para recibir transferencias.',
+          actionLabel: 'Crear cuenta bancaria',
+          actionRoute: '/accounts',
+        }
       }
     } else {
       return {
-        text: 'Crea una cuenta de tipo banco para registrar transferencias.',
-        actionLabel: 'Crear cuenta bancaria',
-        actionRoute: '/accounts'
+        text: 'No tienes otras cuentas de efectivo activas disponibles como destino.',
+        actionLabel: null,
+        actionRoute: null,
       }
     }
-  } else {
-    return {
-      text: 'No tienes otras cuentas de efectivo activas disponibles para este método de pago.',
-      actionLabel: null,
-      actionRoute: null
-    }
   }
+
+  return null
 })
 
 function handleNavigate(route: string) {
@@ -140,18 +140,26 @@ function handleNavigate(route: string) {
 }
 
 function handleConfirm() {
-  if (!destinationAccountId.value) {
-    error.value = 'Debes seleccionar una cuenta destino válida.'
-    return
-  }
-  if (!reason.value.trim()) {
-    error.value = 'El motivo del traslado es obligatorio.'
-    return
-  }
   error.value = null
+
+  if (!destinationAccountId.value) {
+    error.value = 'Debes seleccionar una cuenta destino.'
+    return
+  }
+
+  if (originAccount.value && destinationAccountId.value === originAccount.value.id) {
+    error.value = 'La cuenta destino no puede ser la misma cuenta de origen.'
+    return
+  }
+
+  if (!reason.value.trim()) {
+    error.value = 'El motivo del traslado es obligatorio (PRD Regla 7).'
+    return
+  }
+
   emit('confirm', {
     destinationAccountId: destinationAccountId.value,
-    reason: reason.value.trim()
+    reason: reason.value.trim(),
   })
 }
 </script>
@@ -159,32 +167,31 @@ function handleConfirm() {
 <template>
   <AppModal
     :open="open"
-    title="Trasladar movimiento"
+    title="Trasladar movimiento a otra cuenta"
     confirm-label="Confirmar traslado"
     cancel-label="Cancelar"
-    variant="warning"
-    :confirm-disabled="!destinationAccountId || !reason.trim() || otherAccounts.length === 0"
-    @confirm="handleConfirm"
-    @cancel="emit('update:open', false)"
+    :confirm-disabled="!destinationAccountId || !reason.trim() || availableDestinationAccounts.length === 0"
+    variant="default"
     @update:open="emit('update:open', $event)"
+    @confirm="handleConfirm"
   >
     <template #body>
-      <div v-if="transaction" class="space-y-4 px-6 pb-4">
-
-        <!-- Resumen del movimiento origen -->
-        <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-3.5 flex items-center justify-between gap-3 text-sm">
+      <div v-if="transaction" class="space-y-4">
+        <!-- Resumen del Movimiento Actual -->
+        <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-3">
           <div class="min-w-0">
-            <p class="font-bold text-gray-900 truncate">{{ transaction.reason }}</p>
-            <p class="text-xs text-gray-500 mt-0.5">
-              Origen: <span class="font-semibold text-gray-700">{{ originAccount?.name ?? 'Desconocida' }}</span> ({{ originAccount?.type === 'cash' ? 'Efectivo' : 'Banco' }})
-              &middot; {{ formatDate(transaction.date || transaction.createdAt) }}
+            <p class="text-xs text-gray-400 font-medium uppercase tracking-wider">Movimiento a trasladar</p>
+            <p class="text-sm font-bold text-gray-900 truncate mt-0.5">{{ transaction.reason }}</p>
+            <p class="text-xs text-gray-500 mt-0.5 truncate">
+              <span class="font-semibold text-gray-700">{{ originAccount?.name ?? 'Desconocida' }}</span>
+              &middot; {{ formatDate(transaction.date || transaction.created_at) }}
             </p>
           </div>
           <p
             class="text-base font-bold shrink-0"
-            :class="(transaction.kind === 'income' || transaction.type === 'income') ? 'text-income' : 'text-danger/80'"
+            :class="transaction.type === 'income' ? 'text-income' : 'text-danger/80'"
           >
-            {{ (transaction.kind === 'income' || transaction.type === 'income') ? '+' : '-' }}{{ formatAmount(transaction.amount) }}
+            {{ transaction.type === 'income' ? '+' : '-' }}{{ formatAmount(transaction.amount) }}
           </p>
         </div>
 
@@ -216,18 +223,18 @@ function handleConfirm() {
             <div class="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                @click="paymentType = 'cash'"
+                @click="payment_method = 'cash'"
                 class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition"
-                :class="paymentType === 'cash' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
+                :class="payment_method === 'cash' ? 'bg-primary text-white border-primary shadow-xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
               >
                 <Icon icon="lucide:banknote" class="w-4 h-4" />
                 Efectivo
               </button>
               <button
                 type="button"
-                @click="paymentType = 'transfer'"
+                @click="payment_method = 'transfer'"
                 class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition"
-                :class="paymentType === 'transfer' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
+                :class="payment_method === 'transfer' ? 'bg-primary text-white border-primary shadow-xs' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'"
               >
                 <Icon icon="lucide:arrow-right-left" class="w-4 h-4" />
                 Transferencia
@@ -236,57 +243,75 @@ function handleConfirm() {
           </div>
 
           <!-- Selector de Cuenta Destino -->
-          <div v-if="availableDestinationAccounts.length > 0">
-            <label for="destinationAccountSelect" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-              Cuenta destino
-            </label>
-            <select
-              id="destinationAccountSelect"
-              v-model="destinationAccountId"
-              class="w-full text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
-            >
-              <option
-                v-for="acc in availableDestinationAccounts"
-                :key="acc.id"
-                :value="acc.id"
-              >
-                {{ acc.name }} ({{ acc.type === 'cash' ? 'Efectivo' : 'Banco' }})
-              </option>
-            </select>
-          </div>
-
-          <!-- Resumen de traslado requerido por PRD Regla 7 -->
-          <div
-            v-if="selectedDestinationAccount && originAccount"
-            class="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3 text-xs text-blue-900"
-          >
-            <p class="font-semibold flex items-center gap-1.5">
-              <Icon icon="lucide:info" class="w-4 h-4 text-blue-600 shrink-0" />
-              Resumen del traslado:
-            </p>
-            <p class="mt-1 text-blue-800">
-              Se trasladará de <strong>{{ originAccount.name }}</strong> ({{ originAccount.type === 'cash' ? 'Efectivo' : 'Banco' }})
-              a <strong>{{ selectedDestinationAccount.name }}</strong> ({{ selectedDestinationAccount.type === 'cash' ? 'Efectivo' : 'Banco' }}).
-            </p>
-          </div>
-
-          <!-- Motivo del traslado (Obligatorio) -->
           <div>
-            <label for="relocateReasonInput" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-              Motivo del traslado <span class="text-danger">*</span>
+            <label for="relocate-destination-account" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+              Cuenta destino <span class="text-danger/60">*</span>
+            </label>
+            <div class="relative">
+              <Icon
+                icon="lucide:building-2"
+                class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+              />
+              <select
+                id="relocate-destination-account"
+                v-model="destinationAccountId"
+                :disabled="availableDestinationAccounts.length === 0"
+                class="w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm text-gray-900 appearance-none bg-white transition focus:outline-none focus:ring-2 focus:ring-primary/100 disabled:bg-gray-50 disabled:text-gray-400"
+                :class="availableDestinationAccounts.length === 0 ? 'border-gray-200' : 'border-gray-300'"
+              >
+                <option v-if="availableDestinationAccounts.length === 0" value="" disabled>
+                  Sin cuentas disponibles para este método
+                </option>
+                <option
+                  v-for="account in availableDestinationAccounts"
+                  :key="account.id"
+                  :value="account.id"
+                >
+                  {{ account.name }} ({{ account.type === 'cash' ? 'Efectivo' : 'Banco' }})
+                </option>
+              </select>
+              <Icon
+                icon="lucide:chevron-down"
+                class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+              />
+            </div>
+          </div>
+
+          <!-- Motivo del traslado (Obligatorio PRD Regla 7) -->
+          <div>
+            <label for="relocate-reason" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+              Motivo del traslado <span class="text-danger/60">*</span>
             </label>
             <input
-              id="relocateReasonInput"
-              type="text"
+              id="relocate-reason"
               v-model="reason"
-              placeholder="Ej: registrado por error en cuenta equivocada..."
-              class="w-full text-sm rounded-xl border border-gray-200 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
-              :class="{ 'border-danger focus:ring-danger/20': error }"
+              type="text"
+              placeholder="Ej: Registrado por error en efectivo..."
+              class="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100 transition"
+              @keyup.enter="handleConfirm"
             />
-            <p v-if="error" class="text-xs text-danger mt-1 font-medium">{{ error }}</p>
+            <p class="text-[11px] text-gray-400 mt-1">
+              Quedará registrado como nota de auditoría en la cuenta origen.
+            </p>
           </div>
-        </template>
 
+          <!-- Alerta informativa (PRD Regla 7) -->
+          <div class="bg-blue-50/60 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 space-y-1">
+            <div class="flex items-start gap-1.5 font-semibold text-blue-950">
+              <Icon icon="lucide:info" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <span>Efecto del traslado:</span>
+            </div>
+            <ul class="list-disc list-inside text-blue-800/90 space-y-0.5 pl-1 leading-relaxed">
+              <li>El movimiento original se desactivará en <strong>{{ originAccount?.name }}</strong>.</li>
+              <li>Se creará una copia activa en <strong>{{ selectedDestinationAccount?.name || 'la cuenta destino' }}</strong> conservando la fecha original ({{ formatDate(transaction.date || transaction.created_at) }}).</li>
+            </ul>
+          </div>
+
+          <!-- Mensaje de error si falla la validación -->
+          <p v-if="error" class="text-xs text-danger/80 font-medium bg-danger/10 p-2.5 rounded-lg">
+            {{ error }}
+          </p>
+        </template>
       </div>
     </template>
   </AppModal>

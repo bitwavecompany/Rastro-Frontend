@@ -40,8 +40,9 @@ async function handleDeleteAccountConfirm() {
     sessionStore.dismissRemoteRevocation()
     isDeleteAccountModalOpen.value = false
     router.push('/')
-  } catch (err: any) {
-    toast.error(err.response?.data?.message || 'Error al eliminar la cuenta')
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { message?: string } } }
+    toast.error(error.response?.data?.message || 'Error al eliminar la cuenta')
   } finally {
     isDeleting.value = false
   }
@@ -118,7 +119,8 @@ async function handleDeleteAccountConfirm() {
     confirm-label="Eliminar definitivamente"
     cancel-label="Cancelar"
     variant="danger"
-    :disabled="deleteConfirmationText.trim().toUpperCase() !== 'ELIMINAR' || isDeleting"
+    :confirm-disabled="deleteConfirmationText.trim().toUpperCase() !== 'ELIMINAR' || isDeleting"
+    :loading="isDeleting"
     @confirm="handleDeleteAccountConfirm"
   >
     <template #body>

@@ -1,39 +1,38 @@
 import { reactive, ref } from 'vue'
 import dayjs from 'dayjs'
+import { z } from 'zod'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useToastStore } from '@/stores/useToastStore'
 import type { Transaction, CreateTransactionPayload } from '@/types/transaction'
 import { CreateTransactionSchema } from '@/types/transaction'
-import type { PaymentType, TransactionKind } from '@/constants/transactions'
-import { z } from 'zod'
+import type { PaymentMethod, TransactionType } from '@/constants/transactions'
 
 export type MovementFormData = {
   amount: number | ''
   reason: string
   description: string
-  paymentType: PaymentType
-  accountId: string | number
-  kind: TransactionKind
+  payment_method: PaymentMethod
+  account_id: string
+  type: TransactionType
   date?: string
 }
 
 export type MovementFormErrors = Partial<Record<keyof MovementFormData, string>>
-
-import { useAccountsStore } from '@/stores/useAccountsStore'
 
 export function useMovementForm() {
   const store = useTransactionsStore()
   const accountsStore = useAccountsStore()
   const toast = useToastStore()
 
-  const form = reactive<MovementFormData>({ 
-    amount: '', 
-    reason: '', 
-    description: '', 
-    paymentType: 'cash', 
-    accountId: '', 
-    kind: 'expense',
-    date: dayjs().format('YYYY-MM-DD')
+  const form = reactive<MovementFormData>({
+    amount: '',
+    reason: '',
+    description: '',
+    payment_method: 'cash',
+    account_id: '',
+    type: 'expense',
+    date: dayjs().format('YYYY-MM-DD'),
   })
   const errors = reactive<MovementFormErrors>({})
   const isOpen = ref(false)
@@ -45,12 +44,12 @@ export function useMovementForm() {
       amount: transaction.amount,
       reason: transaction.reason,
       description: transaction.description ?? '',
-      paymentType: transaction.payment_method || transaction.paymentType,
-      accountId: transaction.account_id || transaction.accountId,
-      kind: transaction.type || transaction.kind,
-      date: dayjs(transaction.date || transaction.createdAt || new Date()).format('YYYY-MM-DD')
+      payment_method: transaction.payment_method,
+      account_id: transaction.account_id,
+      type: transaction.type,
+      date: dayjs(transaction.date || transaction.created_at || new Date()).format('YYYY-MM-DD'),
     })
-    Object.keys(errors).forEach(key => delete (errors as any)[key])
+    Object.keys(errors).forEach(key => delete (errors as Record<string, string | undefined>)[key])
     isOpen.value = true
   }
 
@@ -60,34 +59,34 @@ export function useMovementForm() {
   }
 
   function validate(): boolean {
-    Object.keys(errors).forEach(key => delete (errors as any)[key])
-    
+    Object.keys(errors).forEach(key => delete (errors as Record<string, string | undefined>)[key])
+
     try {
       CreateTransactionSchema.parse({
         ...form,
-        amount: Number(form.amount)
+        amount: Number(form.amount),
       })
     } catch (error) {
       if (error instanceof z.ZodError) {
-        error.issues.forEach((err: any) => {
+        error.issues.forEach(err => {
           if (err.path[0]) {
-            (errors as any)[err.path[0]] = err.message
+            (errors as Record<string, string | undefined>)[err.path[0] as string] = err.message
           }
         })
       }
       return false
     }
 
-    // PRD Regla 6: Validar que la cuenta esté activa y coincida con el método de pago
-    const targetAccount = accountsStore.accounts.find(a => String(a.id) === String(form.accountId))
+    // PRD Rule 6: Validate account is active and matches payment method
+    const targetAccount = accountsStore.accounts.find(a => a.id === form.account_id)
     if (!targetAccount) {
-      errors.accountId = 'La cuenta seleccionada no existe o está desactivada'
+      errors.account_id = 'La cuenta seleccionada no existe o está desactivada'
       return false
     }
 
-    const expectedType = form.paymentType === 'cash' ? 'cash' : 'bank'
+    const expectedType = form.payment_method === 'cash' ? 'cash' : 'bank'
     if (targetAccount.type !== expectedType) {
-      errors.accountId = 'El tipo de cuenta debe coincidir con el método de pago seleccionado'
+      errors.account_id = 'El tipo de cuenta debe coincidir con el método de pago seleccionado'
       return false
     }
 
@@ -100,28 +99,26 @@ export function useMovementForm() {
     const payload: Partial<CreateTransactionPayload> = {
       amount: Number(form.amount),
       reason: form.reason.trim(),
-      paymentType: form.paymentType,
-      payment_method: form.paymentType,
-      kind: form.kind,
-      type: form.kind,
-      accountId: form.accountId,
-      account_id: form.accountId,
+      payment_method: form.payment_method,
+      type: form.type,
+      account_id: form.account_id,
       date: form.date ? (form.date.includes('T') ? form.date.split('T')[0] : form.date) : dayjs().format('YYYY-MM-DD'),
       description: form.description.trim() ? form.description.trim() : null,
     }
 
     try {
       await store.update(editing.value.id, payload)
-      toast.success(editing.value.kind === 'expense' ? 'Gasto actualizado' : 'Ingreso actualizado')
+      toast.success(editing.value.type === 'expense' ? 'Gasto actualizado' : 'Ingreso actualizado')
       close()
       return true
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ocurrió un error al actualizar')
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string }
+      toast.error(err.response?.data?.message || err.message || 'Ocurrió un error al actualizar')
       return false
     }
   }
 
-  const editingKind = (): TransactionKind | null => editing.value?.kind ?? null
+  const editingType = (): TransactionType | null => editing.value?.type ?? null
 
-  return { form, errors, isOpen, editing, editingKind, open, close, submit }
+  return { form, errors, isOpen, editing, editingType, open, close, submit }
 }

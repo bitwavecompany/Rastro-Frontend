@@ -8,11 +8,11 @@ import { useEntitlementsStore } from '@/stores/useEntitlementsStore'
 import AppAmountInput from '@/components/ui/AppAmountInput.vue'
 import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
 import type { Transaction, CreateTransactionPayload } from '@/types/transaction'
-import type { PaymentType, TransactionKind } from '@/constants/transactions'
+import type { PaymentMethod, TransactionType } from '@/constants/transactions'
 
 const props = withDefaults(
   defineProps<{
-    kind: TransactionKind
+    type: TransactionType
     disabled?: boolean
     editingItem?: Transaction | null
   }>(),
@@ -32,13 +32,13 @@ const entitlements = useEntitlementsStore()
 const amount = ref<number | ''>('')
 const reason = ref('')
 const description = ref('')
-const paymentType = ref<PaymentType>('cash')
-const accountId = ref<string | number | ''>('')
+const payment_method = ref<PaymentMethod>('cash')
+const account_id = ref<string>('')
 const date = ref(dayjs().format('YYYY-MM-DD'))
-const errors = ref<Partial<Record<'amount' | 'reason' | 'accountId' | 'date', string>>>({})
+const errors = ref<Partial<Record<'amount' | 'reason' | 'account_id' | 'date', string>>>({})
 
-// PRD Regla 1: El método de pago filtra reactivamente las cuentas (cash -> cash, transfer -> bank)
-const targetAccountType = computed(() => paymentType.value === 'cash' ? 'cash' : 'bank')
+// PRD Rule 1: Payment method reactively filters available accounts (cash -> cash, transfer -> bank)
+const targetAccountType = computed(() => payment_method.value === 'cash' ? 'cash' : 'bank')
 const availableAccounts = computed(() => {
   return accountsStore.accounts.filter(a => a.type === targetAccountType.value)
 })
@@ -46,63 +46,63 @@ const availableAccounts = computed(() => {
 watch(
   () => [availableAccounts.value, accountsStore.isLoaded] as const,
   ([newAccounts]) => {
-    const isValid = newAccounts.some(a => String(a.id) === String(accountId.value))
+    const isValid = newAccounts.some(a => a.id === account_id.value)
     if (!isValid) {
-      accountId.value = newAccounts.length > 0 ? newAccounts[0].id : ''
+      account_id.value = newAccounts.length > 0 ? newAccounts[0].id : ''
     }
   },
   { immediate: true }
 )
 
-// PRD Regla 2: Listado vacío muestra mensaje de conversión contextual según el plan
+// PRD Rule 2: Empty accounts list shows contextual call-to-action message
 const emptyAccountsMessage = computed(() => {
   if (availableAccounts.value.length > 0) return null
-  if (paymentType.value === 'transfer') {
+  if (payment_method.value === 'transfer') {
     if (entitlements.isGuest) {
       return {
         text: 'Necesitas una cuenta bancaria para registrar transferencias. Regístrate gratis para crearla.',
         actionLabel: 'Crear cuenta gratis',
-        actionRoute: '/register'
+        actionRoute: '/register',
       }
     } else {
       return {
         text: 'Crea una cuenta de tipo banco para registrar transferencias.',
         actionLabel: 'Crear cuenta bancaria',
-        actionRoute: '/accounts'
+        actionRoute: '/accounts',
       }
     }
   } else {
     return {
       text: 'No tienes cuentas en efectivo activas disponibles para este método de pago.',
       actionLabel: null,
-      actionRoute: null
+      actionRoute: null,
     }
   }
 })
 
 const overdraftWarning = computed(() => {
-  if (props.kind !== 'expense') return false
-  if (!accountId.value || !amount.value || Number(amount.value) <= 0) return false
-  const account = accountsStore.accounts.find(a => String(a.id) === String(accountId.value))
+  if (props.type !== 'expense') return false
+  if (!account_id.value || !amount.value || Number(amount.value) <= 0) return false
+  const account = accountsStore.accounts.find(a => a.id === account_id.value)
   if (!account) return false
-  
-  const currentBalance = transactionsStore.getAccountBalance(account.id, Number(account.initial_balance ?? account.amount ?? 0))
+
+  const currentBalance = transactionsStore.getAccountBalance(account.id, Number(account.initial_balance ?? 0))
   const availableBalance = props.editingItem ? currentBalance + Number(props.editingItem.amount) : currentBalance
-  
+
   return Number(amount.value) > availableBalance
 })
 
-const ringClass = computed(() => props.kind === 'expense' ? 'ring-primary/20 border-primary/50' : 'ring-income/20 border-green-300')
-const focusClass = computed(() => props.kind === 'expense' ? 'focus:ring-primary/100' : 'focus:ring-income/100')
-const activeClass = computed(() => props.kind === 'expense' ? 'bg-primary text-white' : 'bg-income text-white')
-const btnClass = computed(() => props.kind === 'expense'
+const ringClass = computed(() => props.type === 'expense' ? 'ring-primary/20 border-primary/50' : 'ring-income/20 border-green-300')
+const focusClass = computed(() => props.type === 'expense' ? 'focus:ring-primary/100' : 'focus:ring-income/100')
+const activeClass = computed(() => props.type === 'expense' ? 'bg-primary text-white' : 'bg-income text-white')
+const btnClass = computed(() => props.type === 'expense'
   ? 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'
   : 'bg-income text-white hover:bg-income/90 active:bg-green-800'
 )
 
 const isEditing = computed(() => props.editingItem !== null)
 
-const paymentOptions: { value: PaymentType; label: string; icon: string }[] = [
+const paymentOptions: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'cash', label: 'Efectivo', icon: 'lucide:banknote' },
   { value: 'transfer', label: 'Transferencia', icon: 'lucide:arrow-right-left' },
 ]
@@ -111,8 +111,8 @@ function resetForm() {
   amount.value = ''
   reason.value = ''
   description.value = ''
-  paymentType.value = 'cash'
-  accountId.value = availableAccounts.value.length > 0 ? availableAccounts.value[0].id : ''
+  payment_method.value = 'cash'
+  account_id.value = availableAccounts.value.length > 0 ? availableAccounts.value[0].id : ''
   date.value = dayjs().format('YYYY-MM-DD')
   errors.value = {}
 }
@@ -124,9 +124,9 @@ watch(
       amount.value = item.amount
       reason.value = item.reason
       description.value = item.description ?? ''
-      paymentType.value = item.payment_method || item.paymentType || 'cash'
-      accountId.value = item.account_id || item.accountId
-      date.value = dayjs(item.date || item.createdAt).format('YYYY-MM-DD')
+      payment_method.value = item.payment_method || 'cash'
+      account_id.value = item.account_id
+      date.value = dayjs(item.date || item.created_at).format('YYYY-MM-DD')
       errors.value = {}
     } else {
       resetForm()
@@ -139,13 +139,13 @@ function validate(): boolean {
   errors.value = {}
   if (!amount.value || Number(amount.value) <= 0) errors.value.amount = 'Requerido mayor a 0'
   if (!reason.value.trim()) errors.value.reason = 'Requerido'
-  if (!accountId.value || availableAccounts.value.length === 0) {
-    errors.value.accountId = emptyAccountsMessage.value?.text || 'Requerido'
+  if (!account_id.value || availableAccounts.value.length === 0) {
+    errors.value.account_id = emptyAccountsMessage.value?.text || 'Requerido'
   }
-  // PRD Regla 6: Validar que la cuenta pertenezca al tipo correspondiente
-  const selected = accountsStore.accounts.find(a => String(a.id) === String(accountId.value))
+  // PRD Rule 6: Validate account type matches payment method
+  const selected = accountsStore.accounts.find(a => a.id === account_id.value)
   if (selected && selected.type !== targetAccountType.value) {
-    errors.value.accountId = 'El tipo de cuenta debe coincidir con el método de pago'
+    errors.value.account_id = 'El tipo de cuenta debe coincidir con el método de pago'
   }
   return Object.keys(errors.value).length === 0
 }
@@ -153,14 +153,11 @@ function validate(): boolean {
 function handleSubmit() {
   if (props.disabled || availableAccounts.value.length === 0 || !validate()) return
   emit('submit', {
-    kind: props.kind,
-    type: props.kind,
+    type: props.type,
     amount: Number(amount.value),
     reason: reason.value.trim(),
-    paymentType: paymentType.value,
-    payment_method: paymentType.value,
-    accountId: accountId.value,
-    account_id: accountId.value,
+    payment_method: payment_method.value,
+    account_id: account_id.value,
     date: date.value || dayjs().format('YYYY-MM-DD'),
     description: description.value.trim() ? description.value.trim() : null,
   })
@@ -254,7 +251,7 @@ function handleCancel() {
           Método de pago
         </label>
         <AppTypeToggle
-          v-model="paymentType"
+          v-model="payment_method"
           :options="paymentOptions"
           :disabled="disabled"
           :active-class="activeClass"
@@ -272,12 +269,12 @@ function handleCancel() {
           />
           <select
             id="select-account"
-            v-model="accountId"
+            v-model="account_id"
             :disabled="disabled || availableAccounts.length === 0"
             class="w-full pl-8 pr-8 py-2 rounded-lg border text-sm text-gray-900 appearance-none
                    focus:outline-none focus:ring-2 focus:border-transparent
                    disabled:bg-gray-50 disabled:text-gray-400 transition bg-white"
-            :class="[focusClass, errors.accountId ? 'border-danger/60 bg-danger/10' : 'border-gray-300']"
+            :class="[focusClass, errors.account_id ? 'border-danger/60 bg-danger/10' : 'border-gray-300']"
           >
             <option v-if="availableAccounts.length === 0" value="" disabled>
               Sin cuentas disponibles
@@ -296,7 +293,7 @@ function handleCancel() {
           />
         </div>
 
-        <!-- PRD Regla 2: Listado vacío muestra mensaje de conversión contextual -->
+        <!-- PRD Rule 2: Contextual CTA when accounts list is empty -->
         <div
           v-if="emptyAccountsMessage"
           class="mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-xs"
@@ -315,7 +312,7 @@ function handleCancel() {
           </button>
         </div>
 
-        <p v-else-if="errors.accountId" class="mt-1 text-xs text-danger/80 leading-tight">{{ errors.accountId }}</p>
+        <p v-else-if="errors.account_id" class="mt-1 text-xs text-danger/80 leading-tight">{{ errors.account_id }}</p>
       </div>
 
       <div class="flex gap-2 shrink-0 pt-2 sm:pt-0">
@@ -333,10 +330,10 @@ function handleCancel() {
         <button
           type="button"
           @click="handleSubmit"
-          :disabled="disabled || availableAccounts.length === 0 || !accountId"
-          :aria-disabled="disabled || availableAccounts.length === 0 || !accountId"
+          :disabled="disabled || availableAccounts.length === 0 || !account_id"
+          :aria-disabled="disabled || availableAccounts.length === 0 || !account_id"
           class="flex-1 sm:flex-none px-6 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap"
-          :class="[btnClass, { 'opacity-50 pointer-events-none cursor-not-allowed': disabled || availableAccounts.length === 0 || !accountId }]"
+          :class="[btnClass, { 'opacity-50 pointer-events-none cursor-not-allowed': disabled || availableAccounts.length === 0 || !account_id }]"
         >
           {{ disabled ? 'Guardando…' : isEditing ? 'Actualizar' : 'Guardar' }}
         </button>

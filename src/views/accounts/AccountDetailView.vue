@@ -11,9 +11,10 @@ import { useMovementForm } from '@/composables/useMovementForm'
 import { useDeleteConfirm } from '@/composables/useDeleteConfirm'
 import { formatAmount } from '@/utils/formatters'
 import AccountFormFields from '@/components/accounts/AccountFormFields.vue'
-import AppAmountInput from '@/components/ui/AppAmountInput.vue'
-import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
-import MovementRow from '@/components/transactions/MovementRow.vue'
+import MovementListItem from '@/components/transactions/MovementListItem.vue'
+import MovementTableRow from '@/components/transactions/MovementTableRow.vue'
+import MovementDetailModal from '@/components/transactions/MovementDetailModal.vue'
+import MovementEditModal from '@/components/transactions/MovementEditModal.vue'
 import RelocateMovementModal from '@/components/transactions/RelocateMovementModal.vue'
 import RelocateRestoreWarningModal from '@/components/transactions/RelocateRestoreWarningModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -21,7 +22,6 @@ import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import type { Movement, MovementTab } from '@/composables/useAccountDetail'
 import type { Account } from '@/types/account'
 import type { Transaction } from '@/types/transaction'
-import type { PaymentType } from '@/constants/transactions'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,7 +34,7 @@ const toast = useToastStore()
 // PRD Regla 10: Banner contextual si no hay cuentas destino disponibles para traslado
 const relocateBanner = ref<{ text: string; buttonLabel: string; route: string } | null>(null)
 
-const accountId = computed(() => route.params.id as string | number)
+const accountId = computed(() => String(route.params.id))
 
 const {
   account,
@@ -66,16 +66,21 @@ const isRelocateModalOpen = ref(false)
 const restoreWarningItem = ref<Transaction | null>(null)
 const isRestoreWarningOpen = ref(false)
 
+// Estado de detalle de movimiento en móvil
+const selectedMobileMovement = ref<Transaction | null>(null)
+const isMobileDetailOpen = ref(false)
+
+function openMobileMovementDetails(movement: Transaction) {
+  selectedMobileMovement.value = movement
+  isMobileDetailOpen.value = true
+}
+
 const tabs: { key: MovementTab; label: string }[] = [
   { key: 'all',      label: 'Todos' },
   { key: 'incomes',  label: 'Ingresos' },
   { key: 'expenses', label: 'Gastos' },
 ]
 
-const paymentOptions: { value: PaymentType; label: string; icon: string }[] = [
-  { value: 'cash',     label: 'Efectivo',      icon: 'lucide:banknote' },
-  { value: 'transfer', label: 'Transferencia', icon: 'lucide:arrow-right-left' },
-]
 
 const isDefaultAccount = computed(() =>
   Boolean(account.value?.is_default || account.value?.id === accountsStore.defaultAccountId)
@@ -87,9 +92,9 @@ function goBack() {
 
 function handleRequestRelocate(item: Transaction) {
   // PRD Regla 10: La condición de bloqueo es candidateAccounts.length === 0
-  const originAccountId = String(item.account_id || item.accountId)
+  const originAccountId = item.account_id
   const candidateAccounts = accountsStore.accounts.filter(
-    a => !a.deletedAt && !a.deleted_at && String(a.id) !== originAccountId
+    a => !a.deleted_at && a.id !== originAccountId
   )
 
   if (candidateAccounts.length === 0) {
@@ -114,15 +119,16 @@ function handleRequestRelocate(item: Transaction) {
   isRelocateModalOpen.value = true
 }
 
-async function handleRelocateConfirm(payload: { destinationAccountId: string | number; reason: string }) {
+async function handleRelocateConfirm(payload: { destinationAccountId: string; reason: string }) {
   if (!relocatingItem.value) return
   try {
     await transactionsStore.relocate(relocatingItem.value.id, payload.destinationAccountId, payload.reason)
     toast.success('Movimiento trasladado exitosamente')
     isRelocateModalOpen.value = false
     relocatingItem.value = null
-  } catch (err: any) {
-    toast.error(err.message || 'Error al trasladar el movimiento')
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string }
+    toast.error(errorObj.message || 'Error al trasladar el movimiento')
   }
 }
 
@@ -132,8 +138,9 @@ async function handleDeleteAccountConfirm() {
     await accountsStore.remove(account.value.id)
     toast.success('Cuenta desactivada exitosamente')
     router.replace({ name: 'accounts' })
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || error.message || 'Error al desactivar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    toast.error(err.response?.data?.message || err.message || 'Error al desactivar la cuenta')
   } finally {
     deleteAccount.cancel()
   }
@@ -144,8 +151,9 @@ async function handleDeleteMovementConfirm(reason?: string) {
   try {
     await transactionsStore.remove(deleteMovement.target.value.id, reason)
     toast.success('Movimiento desactivado')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || error.message || 'Error al desactivar el movimiento')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    toast.error(err.response?.data?.message || err.message || 'Error al desactivar el movimiento')
   } finally {
     deleteMovement.cancel()
   }
@@ -165,8 +173,9 @@ async function executeRestoreMovement(item: Transaction) {
   try {
     await restoreMovement(item.id)
     toast.success('Movimiento reactivado exitosamente')
-  } catch (error: any) {
-    toast.error(error.message || 'Error al reactivar el movimiento')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err.message || 'Error al reactivar el movimiento')
   } finally {
     isRestoreWarningOpen.value = false
     restoreWarningItem.value = null
@@ -188,8 +197,9 @@ async function handleHardDeleteConfirm() {
   try {
     await hardDeleteMovement(hardDeleteMovementConfirm.target.value.id)
     toast.success('Movimiento eliminado permanentemente')
-  } catch (error: any) {
-    toast.error(error.message || 'Error al eliminar permanentemente')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err.message || 'Error al eliminar permanentemente')
   } finally {
     hardDeleteMovementConfirm.cancel()
   }
@@ -199,8 +209,9 @@ async function handlePurgeAccountConfirm() {
   try {
     await purgeAccountMovements()
     toast.success('Todos los movimientos de la cuenta fueron eliminados permanentemente')
-  } catch (error: any) {
-    toast.error(error.message || 'Error al vaciar los movimientos')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err.message || 'Error al vaciar los movimientos')
   } finally {
     isPurgeModalOpen.value = false
   }
@@ -299,7 +310,7 @@ async function handlePurgeAccountConfirm() {
       <div class="grid grid-cols-3 gap-3">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p class="text-xs text-gray-400 font-medium mb-1">Saldo inicial</p>
-          <p class="text-base font-bold text-gray-900">{{ formatAmount(Number(account.initial_balance ?? account.amount ?? 0)) }}</p>
+          <p class="text-base font-bold text-gray-900">{{ formatAmount(Number(account.initial_balance ?? 0)) }}</p>
         </div>
         <div class="bg-white rounded-2xl border border-income/20 shadow-sm p-4">
           <p class="text-xs text-income font-medium mb-1">Ingresos</p>
@@ -361,15 +372,11 @@ async function handlePurgeAccountConfirm() {
 
         <template v-else>
           <div class="divide-y divide-gray-50 md:hidden">
-            <MovementRow
+            <MovementListItem
               v-for="movement in filteredMovements"
-              :key="`${movement.kind || movement.type}-${movement.id}`"
+              :key="movement.id"
               :item="movement"
-              @edit="movementForm.open($event)"
-              @relocate="handleRequestRelocate"
-              @delete="deleteMovement.request($event as Movement)"
-              @restore="handleRestoreMovement"
-              @hard-delete="handleRequestHardDelete($event as Movement)"
+              @select="openMobileMovementDetails"
             />
           </div>
 
@@ -386,9 +393,9 @@ async function handlePurgeAccountConfirm() {
                 </tr>
               </thead>
               <tbody>
-                <MovementRow
+                <MovementTableRow
                   v-for="movement in filteredMovements"
-                  :key="`${movement.kind || movement.type}-${movement.id}`"
+                  :key="movement.id"
                   :item="movement"
                   @edit="movementForm.open($event)"
                   @relocate="handleRequestRelocate"
@@ -433,62 +440,21 @@ async function handlePurgeAccountConfirm() {
   />
 
   <!-- Modal Editar Movimiento -->
-  <AppFormDialog
-    :open="movementForm.isOpen.value"
-    :title="movementForm.editingKind() === 'income' ? 'Editar ingreso' : 'Editar gasto'"
-    @confirm="movementForm.submit()"
-    @cancel="movementForm.close()"
-    @update:open="val => !val && movementForm.close()"
-  >
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-        Monto <span class="text-danger/60">*</span>
-      </label>
-      <AppAmountInput
-        v-model="movementForm.form.amount"
-        :error="movementForm.errors.amount"
-      />
-    </div>
+  <MovementEditModal
+    :movement-form="movementForm"
+    :account-type="account?.type"
+  />
 
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-        Razón <span class="text-danger/60">*</span>
-      </label>
-      <input
-        v-model="movementForm.form.reason"
-        type="text"
-        placeholder="Razón"
-        class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400
-               focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-        :class="movementForm.errors.reason ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-      />
-      <p v-if="movementForm.errors.reason" class="mt-1 text-xs text-danger/80">{{ movementForm.errors.reason }}</p>
-    </div>
-
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Tipo de pago</label>
-      <AppTypeToggle
-        v-model="movementForm.form.paymentType"
-        :options="paymentOptions"
-        :disabled="true"
-      />
-      <p class="mt-1 text-[11px] text-gray-400">
-        El método de pago corresponde al tipo de esta cuenta ({{ account?.type === 'cash' ? 'Efectivo' : 'Banco' }}).
-      </p>
-    </div>
-
-    <div>
-      <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Descripción</label>
-      <input
-        v-model="movementForm.form.description"
-        type="text"
-        placeholder="Opcional"
-        class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900
-               placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100
-               focus:border-transparent transition"
-      />
-    </div>
-  </AppFormDialog>
+  <!-- Modal Detalle y Acciones Móvil -->
+  <MovementDetailModal
+    v-model:open="isMobileDetailOpen"
+    :item="selectedMobileMovement"
+    @edit="movementForm.open($event)"
+    @relocate="handleRequestRelocate"
+    @delete="deleteMovement.request($event as Movement)"
+    @restore="handleRestoreMovement"
+    @hard-delete="handleRequestHardDelete($event as Movement)"
+  />
 
   <!-- Modal Desactivar Cuenta -->
   <AppModal

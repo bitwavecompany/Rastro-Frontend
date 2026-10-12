@@ -24,7 +24,7 @@ const deleteConfirm = useDeleteConfirm<Account>()
 const restoreConfirm = useDeleteConfirm<Account>()
 
 const displayedAccounts = computed(() => {
-  return hideDeactivated.value ? store.accounts : store._rawAccounts
+  return hideDeactivated.value ? store.accounts : store.allAccounts
 })
 
 async function handleDeleteConfirm() {
@@ -32,8 +32,9 @@ async function handleDeleteConfirm() {
   try {
     await store.remove(deleteConfirm.target.value.id)
     toast.success('Cuenta desactivada exitosamente')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || error.message || 'Error al desactivar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    toast.error(err.response?.data?.message || err.message || 'Error al desactivar la cuenta')
   } finally {
     deleteConfirm.cancel()
   }
@@ -49,8 +50,9 @@ async function handleRestoreConfirm() {
   try {
     await store.restore(restoreConfirm.target.value.id)
     toast.success('Cuenta reactivada exitosamente')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || error.message || 'Error al reactivar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    toast.error(err.response?.data?.message || err.message || 'Error al reactivar la cuenta')
   } finally {
     restoreConfirm.cancel()
   }

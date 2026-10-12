@@ -5,9 +5,10 @@ import { useProfileStore } from '@/stores/useProfileStore'
 import { useSessionStore } from '@/stores/useSessionStore'
 import { useToastStore } from '@/stores/useToastStore'
 import AppModal from '@/components/ui/AppModal.vue'
-import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import DeadLetterQueueModal from '@/components/sync/DeadLetterQueueModal.vue'
 import GuestUpgradePromptModal from '@/components/modals/GuestUpgradePromptModal.vue'
+import ProfilePremiumModal from '@/components/profile/ProfilePremiumModal.vue'
+import ProfileDeleteAccountModal from '@/components/profile/ProfileDeleteAccountModal.vue'
 import packageJson from '../../package.json'
 import { authApi } from '@/api/auth'
 import { transactionsApi } from '@/api/transactions'
@@ -28,12 +29,9 @@ const isPremiumModalOpen = ref(false)
 const isGuestUpgradeModalOpen = ref(false)
 const isPremiumSuccessModalOpen = ref(false)
 const isSubmittingPremium = ref(false)
-const premiumForm = ref({ bank: '', receipt: '' })
-const premiumErrors = ref({ bank: '', receipt: '' })
 
 // 2-Step delete account state (PRD 10.2)
 const isDeleteAccountModalOpen = ref(false)
-const deleteConfirmationText = ref('')
 const isSubmittingDelete = ref(false)
 
 const isExportingCsv = ref(false)
@@ -73,8 +71,9 @@ async function handleSaveAlias() {
   try {
     await store.save({ name: aliasForm.value.trim() })
     toast.success('Alias actualizado')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Error al actualizar el alias')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err.response?.data?.message || 'Error al actualizar el alias')
   } finally {
     isSaving.value = false
     isEditingAlias.value = false
@@ -101,43 +100,28 @@ function handlePremiumClick() {
     isGuestUpgradeModalOpen.value = true
     return
   }
-  premiumForm.value = { bank: '', receipt: '' }
-  premiumErrors.value = { bank: '', receipt: '' }
   isPremiumModalOpen.value = true
 }
 
-async function handlePremiumSubmit() {
-  premiumErrors.value = { bank: '', receipt: '' }
-  let valid = true
-
-  if (!premiumForm.value.bank.trim()) {
-    premiumErrors.value.bank = 'El banco es obligatorio'
-    valid = false
-  }
-  if (!premiumForm.value.receipt.trim()) {
-    premiumErrors.value.receipt = 'El comprobante es obligatorio'
-    valid = false
-  }
-
-  if (!valid) return
-
+async function handlePremiumSubmit(payload: { bank: string; receipt: string }) {
   isSubmittingPremium.value = true
 
   try {
     await authApi.requestPremium({
-      origin_bank: premiumForm.value.bank.trim(),
-      transfer_receipt: premiumForm.value.receipt.trim()
+      origin_bank: payload.bank,
+      transfer_receipt: payload.receipt,
     })
     // Guardar referencia local para mostrar badge pending_verification
     await store.save({
       payment_method: 'transfer',
-      payment_bank: premiumForm.value.bank.trim(),
-      payment_receipt: premiumForm.value.receipt.trim()
+      payment_bank: payload.bank,
+      payment_receipt: payload.receipt,
     })
     isPremiumModalOpen.value = false
     isPremiumSuccessModalOpen.value = true
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Error al enviar la solicitud')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err.response?.data?.message || 'Error al enviar la solicitud')
   } finally {
     isSubmittingPremium.value = false
   }
@@ -154,7 +138,7 @@ async function handleLogout() {
     if (!isGuest.value) {
       await authApi.logout()
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
     // Ignorar si el token ya expiró
   } finally {
     await store.clearAllLocalData()
@@ -165,17 +149,11 @@ async function handleLogout() {
 }
 
 function requestDeleteAccount() {
-  deleteConfirmationText.value = ''
   isDeleteAccountModalOpen.value = true
 }
 
 // PRD 10.2: Eliminación en dos pasos (escribir ELIMINAR)
 async function handleDeleteAccount() {
-  if (deleteConfirmationText.value.trim().toUpperCase() !== 'ELIMINAR') {
-    toast.error('Debes escribir la palabra ELIMINAR exactamente')
-    return
-  }
-
   isSubmittingDelete.value = true
   try {
     await authApi.deleteAccount()
@@ -183,8 +161,9 @@ async function handleDeleteAccount() {
     toast.success('Cuenta y datos eliminados permanentemente del servidor y del dispositivo')
     isDeleteAccountModalOpen.value = false
     router.push('/')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Error al eliminar la cuenta')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err.response?.data?.message || 'Error al eliminar la cuenta')
   } finally {
     isSubmittingDelete.value = false
   }
@@ -210,8 +189,9 @@ async function handleExportCsv() {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     toast.success('Historial exportado exitosamente')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Error al descargar el archivo CSV')
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } } }
+    toast.error(err.response?.data?.message || 'Error al descargar el archivo CSV')
   } finally {
     isExportingCsv.value = false
   }
@@ -505,77 +485,18 @@ async function handleExportCsv() {
   />
 
   <!-- PRD 10.2: Modal Eliminar Cuenta en 2 Pasos (Escribir ELIMINAR) -->
-  <AppModal
+  <ProfileDeleteAccountModal
     v-model:open="isDeleteAccountModalOpen"
-    title="Eliminar cuenta permanentemente"
-    description="Esta acción eliminará físicamente todos tus datos del dispositivo y del servidor. Para confirmar, escribe la palabra ELIMINAR a continuación:"
-    confirm-label="Eliminar definitivamente"
-    cancel-label="Cancelar"
-    variant="danger"
+    :loading="isSubmittingDelete"
     @confirm="handleDeleteAccount"
-  >
-    <template #body>
-      <div class="px-6 pb-2 space-y-3">
-        <p class="text-xs text-danger font-semibold">
-          ⚠️ Acción irreversible: todas tus cuentas y movimientos serán borrados sin posibilidad de recuperación.
-        </p>
-        <div>
-          <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-            Escribe "ELIMINAR" para continuar
-          </label>
-          <input
-            v-model="deleteConfirmationText"
-            type="text"
-            placeholder="ELIMINAR"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm font-mono uppercase focus:ring-2 focus:ring-danger focus:outline-none"
-          />
-        </div>
-      </div>
-    </template>
-  </AppModal>
+  />
 
   <!-- Formulario Solicitud Premium (PRD 8.1) -->
-  <AppFormDialog
+  <ProfilePremiumModal
     v-model:open="isPremiumModalOpen"
-    title="Mejorar a Premium"
-    confirm-label="Enviar comprobante"
-    cancel-label="Cancelar"
     :loading="isSubmittingPremium"
-    @confirm="handlePremiumSubmit"
-    @cancel="isPremiumModalOpen = false"
-  >
-    <div class="space-y-4">
-      <p class="text-sm text-gray-600">
-        Realiza una transferencia bancaria e ingresa los datos a continuación. Tu solicitud será revisada manualmente.
-      </p>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-          Banco de origen
-        </label>
-        <input
-          v-model="premiumForm.bank"
-          type="text"
-          placeholder="Ej: Banco Pichincha"
-          class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-          :class="premiumErrors.bank ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-        />
-        <p v-if="premiumErrors.bank" class="mt-1 text-xs text-danger/80">{{ premiumErrors.bank }}</p>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-          Número de comprobante
-        </label>
-        <input
-          v-model="premiumForm.receipt"
-          type="text"
-          placeholder="Ej: TRX-10928374"
-          class="w-full px-3 py-2 rounded-lg border text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/100 focus:border-transparent transition"
-          :class="premiumErrors.receipt ? 'border-danger/60 bg-danger/10' : 'border-gray-300'"
-        />
-        <p v-if="premiumErrors.receipt" class="mt-1 text-xs text-danger/80">{{ premiumErrors.receipt }}</p>
-      </div>
-    </div>
-  </AppFormDialog>
+    @submit="handlePremiumSubmit"
+  />
 
   <!-- PRD 8.1: Modal confirmación de recepción de solicitud -->
   <AppModal

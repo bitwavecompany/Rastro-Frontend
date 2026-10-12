@@ -38,8 +38,7 @@ export function useUserProfileQuery() {
 
       const updated = {
         id: String(user.id),
-        name: user.name || user.alias || profileStore.profile.name,
-        alias: user.alias || user.name || profileStore.profile.alias,
+        name: user.name || profileStore.profile.name,
         email: user.email || profileStore.profile.email,
         plan: (user.plan || 'free') as 'guest' | 'free' | 'premium',
         role: (user.role || 'client') as 'client' | 'admin',

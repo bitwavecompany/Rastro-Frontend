@@ -43,8 +43,8 @@ const accountTypeOptions: { value: AccountType; label: string; icon: string }[] 
       Saldo inicial <span class="text-danger/60">*</span>
     </label>
     <AppAmountInput
-      v-model="props.form.amount"
-      :error="props.errors.amount"
+      v-model="props.form.initial_balance"
+      :error="props.errors.initial_balance"
       :disabled="isDefaultAccount"
       min="0"
     />

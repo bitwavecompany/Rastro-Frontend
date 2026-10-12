@@ -1,7 +1,7 @@
 /**
- * Convierte cualquier objeto reactivo de Vue (Proxy, ref, reactive)
- * y sus estructuras anidadas (arreglos, sub-objetos) en un objeto plano
- * de JavaScript 100% serializable por el Structured Clone Algorithm de IndexedDB.
+ * Converts any Vue reactive object (Proxy, ref, reactive)
+ * and its nested structures into a plain JavaScript object
+ * fully serializable by IndexedDB's Structured Clone Algorithm.
  */
 export function toPlainObject<T>(obj: T): T {
   if (obj === undefined || obj === null) return obj

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { db, type DlqEntry } from '@/database/db'
 import { enqueueOutbox } from '@/sync/outbox'
 import { useToastStore } from '@/stores/useToastStore'
@@ -33,6 +33,15 @@ onMounted(() => {
   loadDlq()
 })
 
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      loadDlq()
+    }
+  }
+)
+
 async function handleRetry(item: DlqEntry) {
   try {
     if (item.seq) {
@@ -41,7 +50,7 @@ async function handleRetry(item: DlqEntry) {
     await enqueueOutbox(item.entity, item.entityId, item.op, item.payload)
     toast.success('Operación reencolada para sincronización')
     await loadDlq()
-  } catch (error: any) {
+  } catch (_error: unknown) {
     toast.error('Error al reintentar la operación')
   }
 }
@@ -51,9 +60,25 @@ async function handleDismiss(item: DlqEntry) {
     if (item.seq) {
       await db.dlq.delete(item.seq)
     }
+    // PRD 7.3: Cascade discard associated transaction errors if discarding an account
+    if (item.entity === 'accounts' && item.entityId) {
+      const allDlq = await db.dlq.toArray()
+      const relatedTxEntries = allDlq.filter(entry =>
+        entry.entity === 'transactions' &&
+        entry.payload &&
+        typeof entry.payload === 'object' &&
+        'account_id' in entry.payload &&
+        (entry.payload as { account_id?: string }).account_id === item.entityId
+      )
+      for (const rel of relatedTxEntries) {
+        if (rel.seq) {
+          await db.dlq.delete(rel.seq)
+        }
+      }
+    }
     toast.info('Operación descartada')
     await loadDlq()
-  } catch (error: any) {
+  } catch (_error: unknown) {
     toast.error('Error al descartar')
   }
 }
@@ -63,7 +88,7 @@ async function handleClearAll() {
     await db.dlq.clear()
     toast.info('Bandeja de errores vaciada')
     await loadDlq()
-  } catch (error) {
+  } catch (_error: unknown) {
     toast.error('Error al limpiar la bandeja')
   }
 }

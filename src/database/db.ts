@@ -11,40 +11,22 @@ export interface DlqEntry extends OutboxEntry {
 }
 
 export class RastroDatabase extends Dexie {
-  accounts!: Table<Account, string | number>
-  transactions!: Table<Transaction, string | number>
+  accounts!: Table<Account, string>
+  transactions!: Table<Transaction, string>
   profile!: Table<Profile, string>
   outbox!: Table<OutboxEntry, number>
-  meta!: Table<{ key: string; value: any }, string>
+  meta!: Table<{ key: string; value: unknown }, string>
   dlq!: Table<DlqEntry, number>
 
   constructor() {
     super('RastroLocalDB')
-    
-    // v3 Schema: Added sync fields and outbox/meta tables
-    this.version(3).stores({
-      accounts: 'id, type, syncStatus, updatedAt, deletedAt, ownerId',
-      transactions: 'id, kind, accountId, createdAt, syncStatus, updatedAt, deletedAt, ownerId',
-      profile: 'id',
-      outbox: '++seq, opId, entity, entityId, createdAt',
-      meta: 'key'
-    })
 
-    // v4 Schema: Added Dead Letter Queue (DLQ)
-    this.version(4).stores({
-      dlq: '++seq, opId, entity, entityId, failedAt'
-    })
-
-    // v5 Schema: Canonical fields (is_default, date, deleted_at, account_id)
-    this.version(5).stores({
-      accounts: 'id, type, is_default, syncStatus, updatedAt, deletedAt, deleted_at, ownerId',
-      transactions: 'id, kind, type, accountId, account_id, date, createdAt, syncStatus, updatedAt, deletedAt, deleted_at, ownerId',
-      dlq: '++seq, opId, entity, entityId, errorCode, failedAt'
-    })
-
-    // v6 Schema: Added transfer_id (Backlog transferencias entre cuentas propias)
-    this.version(6).stores({
-      transactions: 'id, kind, type, accountId, account_id, date, transfer_id, createdAt, syncStatus, updatedAt, deletedAt, deleted_at, ownerId'
+    // Schema v7: versión canónica sin versiones intermedias de prototipado (v3 a v6 eliminadas)
+    this.version(7).stores({
+      accounts: 'id, name, type, sync_status, created_at, deleted_at',
+      transactions: 'id, account_id, type, payment_method, date, sync_status, created_at, deleted_at, transfer_id',
+      outbox: 'opId, entity, op, createdAt, [status+createdAt]',
+      profile: 'id, updated_at',
     })
   }
 }

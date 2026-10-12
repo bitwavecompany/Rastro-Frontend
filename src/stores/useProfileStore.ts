@@ -16,7 +16,6 @@ function generateLocalUserId(): string {
 
 const EMPTY_PROFILE: Omit<Profile, 'id'> = {
   name: 'Usuario Invitado',
-  alias: 'Usuario Invitado',
   email: null,
   plan: 'guest',
 }
@@ -39,8 +38,7 @@ export const useProfileStore = defineStore('profile', () => {
 
         profile.value = {
           id: String(user.id),
-          name: user.name || user.alias || 'Usuario',
-          alias: user.alias || user.name || null,
+          name: user.name || 'Usuario',
           email: user.email || null,
           plan: user.plan || 'free',
           role: user.role || 'client',
@@ -60,7 +58,7 @@ export const useProfileStore = defineStore('profile', () => {
           await db.profile.add(toPlainObject(profile.value))
         }
       }
-    } catch (error) {
+    } catch (_error) {
       const profiles = await db.profile.toArray()
       if (profiles.length > 0) {
         profile.value = profiles[0]
@@ -91,7 +89,7 @@ export const useProfileStore = defineStore('profile', () => {
         }
         await db.profile.put(toPlainObject(profile.value))
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignorar errores silenciosos de red
     }
   }
@@ -116,7 +114,7 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   async function clearAllLocalData() {
-    session.clearToken()
+    session.clearTokens()
 
     // 1. Limpiar colas de sincronización y metadatos en IndexedDB
     await Promise.all([

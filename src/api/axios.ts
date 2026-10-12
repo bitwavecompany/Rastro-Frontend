@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
+import { tokenStorage } from '@/services/tokenStorage'
 
 interface CustomRequestConfig extends AxiosRequestConfig {
   _retry?: boolean
@@ -16,10 +17,10 @@ const api = axios.create({
 let isRefreshing = false
 let failedQueue: Array<{
   resolve: (token: string) => void
-  reject: (error: any) => void
+  reject: (error: unknown) => void
 }> = []
 
-function processQueue(error: any, token: string | null = null) {
+function processQueue(error: unknown, token: string | null = null) {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error)
@@ -31,7 +32,7 @@ function processQueue(error: any, token: string | null = null) {
 }
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
+  const token = tokenStorage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -68,7 +69,7 @@ api.interceptors.response.use(
       }
 
       // Caso 2: Access token expirado o 401 estándar -> Intentar refresco transparente con refresh_token
-      const refreshToken = localStorage.getItem('refresh_token')
+      const refreshToken = tokenStorage.getRefreshToken()
       if (!refreshToken) {
         // No hay refresh token disponible: invalidar tokens sin tocar base de datos local
         try {
@@ -128,10 +129,10 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
         }
         return api(originalRequest)
-      } catch (refreshError: any) {
+      } catch (refreshError: unknown) {
         processQueue(refreshError, null)
 
-        const refreshCode = refreshError.response?.data?.code
+        const refreshCode = (refreshError as { response?: { data?: { code?: string } } })?.response?.data?.code
         if (refreshCode === 'SESSION_REVOKED_REMOTE') {
           try {
             const { syncEngine } = await import('@/sync/SyncEngine')

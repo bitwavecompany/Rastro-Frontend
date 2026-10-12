@@ -10,14 +10,14 @@ import type { AccountType } from '@/constants/accounts'
 export type AccountFormData = {
   name: string
   type: AccountType
-  amount: number | ''
+  initial_balance: number | ''
   description: string
 }
 
 export type AccountFormErrors = Partial<Record<keyof AccountFormData, string>>
 
 function emptyForm(): AccountFormData {
-  return { name: '', type: 'bank', amount: '', description: '' }
+  return { name: '', type: 'bank', initial_balance: '', description: '' }
 }
 
 export function useAccountForm() {
@@ -35,7 +35,7 @@ export function useAccountForm() {
   const hasMovements = ref(false)
   const isCascadeConfirmOpen = ref(false)
   const isCascadeConfirmed = ref(false)
-  let pendingAccountId: string | number | undefined = undefined
+  let pendingAccountId: string | undefined = undefined
 
   function open(account?: Account) {
     isCascadeConfirmed.value = false
@@ -63,14 +63,14 @@ export function useAccountForm() {
       initialType.value = account.type
       isDefault.value = Boolean(account.is_default || account.id === store.defaultAccountId)
 
-      // PRD Regla 4: Verificar si la cuenta tiene movimientos (activos o desactivados)
+      // PRD Rule 4: Verify if account has existing transactions
       const movements = transactionsStore.byAccount(account.id, undefined, true)
       hasMovements.value = movements.length > 0
 
       Object.assign(form, {
         name: account.name,
         type: account.type,
-        amount: account.initial_balance ?? account.amount,
+        initial_balance: account.initial_balance,
         description: account.description ?? '',
       })
     }
@@ -85,20 +85,12 @@ export function useAccountForm() {
   function validate(): CreateAccountPayload | null {
     Object.keys(errors).forEach(key => delete errors[key as keyof AccountFormErrors])
 
-    // PRD 3.2: Unicidad de nombre de cuenta por usuario
     const trimmedName = form.name.trim()
-    const duplicate = store.accounts.find(
-      a => a.name.toLowerCase() === trimmedName.toLowerCase()
-    )
-    if (duplicate && (!isOpen.value || form.name !== duplicate.name)) {
-      // Si estamos editando y no cambió de nombre, es válido
-    }
 
     const payloadToValidate = {
       name: trimmedName,
       type: form.type,
-      amount: Number(form.amount),
-      initial_balance: Number(form.amount),
+      initial_balance: Number(form.initial_balance),
       description: form.description.trim() || undefined,
     }
 
@@ -117,20 +109,20 @@ export function useAccountForm() {
     return result.data
   }
 
-  async function submit(accountId?: string | number): Promise<boolean> {
+  async function submit(accountId?: string): Promise<boolean> {
     const payload = validate()
     if (!payload) return false
 
-    // Validación de nombre duplicado en el cliente
+    // Unique account name validation per user (PRD 3.2)
     const existingSameName = store.accounts.find(
-      a => a.name.toLowerCase() === payload.name.toLowerCase() && String(a.id) !== String(accountId || '')
+      a => a.name.toLowerCase() === payload.name.toLowerCase() && a.id !== (accountId || '')
     )
     if (existingSameName) {
       errors.name = 'Ya existe una cuenta con este nombre'
       return false
     }
 
-    // PRD Regla 4 y 5: Si la cuenta tiene movimientos y se cambia el tipo, solicitar confirmación
+    // PRD Rule 4 & 5: If account has transactions and type changes, request cascade confirmation
     if (accountId !== undefined && editingAccount.value) {
       const typeChanged = payload.type !== initialType.value
       if (typeChanged && hasMovements.value && !isCascadeConfirmed.value) {
@@ -150,8 +142,9 @@ export function useAccountForm() {
       }
       close()
       return true
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || error.message || 'Ocurrió un error al guardar')
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string }
+      toast.error(err.response?.data?.message || err.message || 'Ocurrió un error al guardar')
       return false
     }
   }
@@ -167,23 +160,22 @@ export function useAccountForm() {
 
   function cancelCascade() {
     isCascadeConfirmOpen.value = false
-    // Revertir el tipo al original si se cancela la confirmación
     if (initialType.value) {
       form.type = initialType.value
     }
   }
 
-  return { 
-    form, 
-    errors, 
-    isOpen, 
-    isDefault, 
+  return {
+    form,
+    errors,
+    isOpen,
+    isDefault,
     hasMovements,
     isCascadeConfirmOpen,
-    open, 
-    close, 
+    open,
+    close,
     submit,
     confirmCascade,
-    cancelCascade
+    cancelCascade,
   }
 }

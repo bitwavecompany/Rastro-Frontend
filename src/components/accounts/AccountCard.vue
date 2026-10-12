@@ -18,7 +18,7 @@ defineEmits<{
 const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 
-const isDeactivated = computed(() => Boolean(props.account.deletedAt || props.account.deleted_at))
+const isDeactivated = computed(() => Boolean(props.account.deleted_at))
 const isDefault = computed(() => Boolean(props.account.is_default || props.account.id === accountsStore.defaultAccountId))
 </script>
 
@@ -53,7 +53,7 @@ const isDefault = computed(() => Boolean(props.account.is_default || props.accou
       </div>
 
       <p class="text-base font-bold text-gray-900 mt-0.5">
-        {{ formatAmount(transactionsStore.getAccountBalance(account.id, Number(account.initial_balance ?? account.amount ?? 0))) }}
+        {{ formatAmount(transactionsStore.getAccountBalance(account.id, Number(account.initial_balance ?? 0))) }}
       </p>
       <p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Saldo actual</p>
       
