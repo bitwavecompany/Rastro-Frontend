@@ -298,6 +298,22 @@ async function handleExportCsv() {
               </div>
             </div>
 
+            <!-- Plan Free Actual (para usuarios registrados en plan gratuito) -->
+            <div v-if="isRegistered" class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <Icon icon="lucide:cloud" class="w-4 h-4" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-semibold text-gray-900">Plan Free (Actual)</h3>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary uppercase">Activo</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-0.5">3 cuentas activas, movimientos ilimitados, historial de 6 meses y sincronización en la nube.</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Opción a Premium -->
             <div v-if="isGuest || isRegistered" class="bg-amber-50/30 rounded-xl p-4 border border-amber-200/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div class="flex items-start gap-3">
@@ -305,7 +321,7 @@ async function handleExportCsv() {
                   <Icon icon="lucide:sparkles" class="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-900">Plan Premium</h3>
+                  <h3 class="text-sm font-semibold text-gray-900">Mejorar a Premium</h3>
                   <p class="text-xs text-gray-600 mt-0.5">Cuentas ilimitadas, movimientos ilimitados, historial completo sin cortes y exportación a CSV.</p>
                 </div>
               </div>
@@ -323,7 +339,7 @@ async function handleExportCsv() {
                  <Icon icon="lucide:crown" class="w-4 h-4" />
                </div>
                <div>
-                 <p class="text-sm font-bold text-amber-900">Eres usuario Premium</p>
+                 <p class="text-sm font-bold text-amber-900">Eres usuario Premium (Actual)</p>
                  <p class="text-xs text-amber-700/80 mt-0.5">Cuentas ilimitadas, historial completo sin cortes y exportación activa.</p>
                </div>
             </div>
