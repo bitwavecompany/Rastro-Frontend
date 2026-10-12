@@ -10,8 +10,8 @@ const profileStore = useProfileStore()
 const collapsed = ref(false)
 
 const initials = computed(() => {
-  const name = profileStore.profile.name.trim()
-  if (!name) return '?'
+  const name = profileStore.profile.name?.trim() || ''
+  if (!name || name === 'Usuario Invitado') return '?'
   return name
     .split(' ')
     .filter(Boolean)
@@ -21,9 +21,9 @@ const initials = computed(() => {
 })
 
 const roleBadge = computed(() => {
-  const token = profileStore.profile.roleToken
-  if (token === 'cHJlbWl1bV91bmxvY2tlZF8yMDI2') return { label: 'PRO', classes: 'bg-amber-100 text-amber-700' }
-  if (token === 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2') return { label: 'FREE', classes: 'bg-primary/10 text-primary' }
+  const plan = profileStore.profile.plan
+  if (plan === 'premium') return { label: 'PRO', classes: 'bg-amber-100 text-amber-700' }
+  if (plan === 'free') return { label: 'FREE', classes: 'bg-primary/10 text-primary' }
   return { label: 'GUEST', classes: 'bg-gray-100 text-gray-600' }
 })
 
@@ -59,9 +59,11 @@ function navigate(to: string) {
             <img src="/sololetras-blanco.jpg" alt="Rastro" class="h-6 w-auto" />
         </div>
         <button
+          type="button"
           @click="collapsed = !collapsed"
-          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors shrink-0"
           :title="collapsed ? 'Expandir' : 'Colapsar'"
+          :aria-label="collapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral'"
         >
           <Icon :icon="collapsed ? 'lucide:chevrons-right' : 'lucide:chevrons-left'" class="w-5 h-5" />
         </button>
@@ -106,7 +108,7 @@ function navigate(to: string) {
           </div>
           <template v-if="!collapsed">
             <div class="flex-1 flex flex-col items-start min-w-0">
-              <span class="truncate w-full text-left">{{ profileStore.profile.name || 'Mi perfil' }}</span>
+              <span class="truncate w-full text-left">{{ profileStore.profile.name === 'Usuario Invitado' ? 'Toca para tu nombre' : profileStore.profile.name }}</span>
               <span 
                 class="mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
                 :class="roleBadge.classes"
@@ -145,30 +147,32 @@ function navigate(to: string) {
           </div>
           <div>
             <p class="text-sm font-bold leading-tight">¡Felicidades! Tu cuenta Premium fue aprobada.</p>
-            <p class="text-xs text-amber-100 mt-0.5">Tus límites han sido removidos automáticamente.</p>
+            <p class="text-xs text-amber-100 mt-0.5">Tus límites de cuentas han sido removidos automáticamente.</p>
           </div>
         </div>
         <button 
+          type="button"
           @click="profileStore.dismissUpgradeBanner()" 
           class="p-1 hover:bg-white/20 rounded-md transition shrink-0"
+          aria-label="Cerrar notificación"
         >
           <Icon icon="lucide:x" class="w-4 h-4" />
         </button>
       </div>
 
       <main class="flex-1 overflow-y-auto pb-16 md:pb-0">
-        <RouterView />
+        <RouterView :key="$route.fullPath" />
       </main>
 
     </div>
 
-    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 flex z-40">
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white/85 backdrop-blur-xl border-t border-gray-100 flex z-40 pb-[env(safe-area-inset-bottom)]">
       <button
         v-for="item in navItems"
         :key="item.to"
         @click="navigate(item.to)"
         class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors relative"
-        :class="isActive(item.to) ? 'text-gray-900' : 'text-gray-400'"
+        :class="isActive(item.to) ? 'text-gray-900' : 'text-gray-500'"
       >
         <Icon :icon="item.icon" class="w-6 h-6" />
         {{ item.name }}
@@ -178,7 +182,7 @@ function navigate(to: string) {
       <button
         @click="navigate('/profile')"
         class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors relative"
-        :class="isActive('/profile') ? 'text-gray-900' : 'text-gray-400'"
+        :class="isActive('/profile') ? 'text-gray-900' : 'text-gray-500'"
       >
         <div
           class="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"

@@ -2,13 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/useToastStore'
-import { useProfileStore } from '@/stores/useProfileStore'
-import { db } from '@/database/db'
-import api from '@/api/axios'
+import { authApi } from '@/api/auth'
+import { authMergeService } from '@/services/authMergeService'
 
 const router = useRouter()
 const toast = useToastStore()
-const profileStore = useProfileStore()
 
 const form = ref({ name: '', email: '', password: '' })
 const isLoading = ref(false)
@@ -24,43 +22,37 @@ async function handleRegister() {
   errorMsg.value = ''
 
   try {
-    const accounts = await db.accounts.toArray()
-    const transactions = await db.transactions.toArray()
+    const { accounts: cleanAccounts, transactions: cleanTransactions } =
+      await authMergeService.prepareGuestDataForRegistration()
 
-    const response = await api.post('/auth/register-sync', {
+    const response = await authApi.registerSync({
       name: form.value.name.trim(),
       email: form.value.email.trim(),
       password: form.value.password,
-      localData: { accounts, transactions }
+      device_name: 'Web Browser',
+      localData: { accounts: cleanAccounts, transactions: cleanTransactions },
     })
 
-    const { token, user, syncedData } = response.data.data
+    const { token, refresh_token: refreshToken, user, syncedData } = response.data.data
 
-    localStorage.setItem('auth_token', token)
-
-    await profileStore.save({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      roleToken: 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2'
+    await authMergeService.completeRegistrationSync({
+      token,
+      refreshToken,
+      user,
+      syncedAccounts: syncedData?.accounts || [],
+      syncedTransactions: syncedData?.transactions || [],
     })
-
-    await db.accounts.clear()
-    await db.transactions.clear()
-
-    if (syncedData.accounts.length > 0) await db.accounts.bulkAdd(syncedData.accounts)
-    if (syncedData.transactions.length > 0) await db.transactions.bulkAdd(syncedData.transactions)
 
     toast.success('¡Registro y sincronización exitosos!')
+    router.push('/')
 
-    window.location.href = '/'
-
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      const errors = error.response.data.errors
-      errorMsg.value = errors[Object.keys(errors)[0]][0]
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } }
+    if (err.response?.status === 422) {
+      const errors = err.response.data?.errors
+      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : err.response.data?.message || 'Error de validación'
     } else {
-      errorMsg.value = error.response?.data?.message || 'Error al conectar con el servidor'
+      errorMsg.value = err.response?.data?.message || 'Error al conectar con el servidor'
     }
   } finally {
     isLoading.value = false

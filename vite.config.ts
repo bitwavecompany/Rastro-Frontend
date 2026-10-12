@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { fileURLToPath, URL } from 'node:url'
@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         plugins: [
           ...(isProduction ? [
-            (obfuscator as any)({
+            (obfuscator as unknown as (options: Record<string, unknown>) => Plugin)({
               global: true,
               options: {
                 compact: true,

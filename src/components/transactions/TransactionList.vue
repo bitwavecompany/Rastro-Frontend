@@ -1,39 +1,43 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { Transaction, TransactionKind } from '@/types/transaction'
-import MovementRow from '@/components/transactions/MovementRow.vue'
-import AppFormDialog from '@/components/ui/AppFormDialog.vue'
-import { formatAmount, formatDate, paymentLabel } from '@/utils/formatters'
-import { useAccountsStore } from '@/stores/useAccountsStore'
+import type { Transaction } from '@/types/transaction'
+import type { TransactionType } from '@/constants/transactions'
+import MovementListItem from '@/components/transactions/MovementListItem.vue'
+import MovementTableRow from '@/components/transactions/MovementTableRow.vue'
+import MovementDetailModal from '@/components/transactions/MovementDetailModal.vue'
 
 const props = defineProps<{
-  kind: TransactionKind
+  type: TransactionType
   items: Transaction[]
+  deactivatedCount?: number
+  hideDeactivated?: boolean
 }>()
 
 const emit = defineEmits<{
   edit: [item: Transaction]
+  relocate: [item: Transaction]
   delete: [item: Transaction]
+  restore: [item: Transaction]
+  'hard-delete': [item: Transaction]
+  'update:hideDeactivated': [val: boolean]
 }>()
 
-const accountsStore = useAccountsStore()
-
 const title = computed(() =>
-  props.kind === 'expense' ? 'Historial de gastos' : 'Historial de ingresos'
+  props.type === 'expense' ? 'Historial de gastos' : 'Historial de ingresos'
 )
 
 const emptyLabel = computed(() =>
-  props.kind === 'expense' ? 'Sin gastos registrados' : 'Sin ingresos registrados'
+  props.type === 'expense' ? 'Sin gastos registrados' : 'Sin ingresos registrados'
 )
 
 const emptyHint = computed(() =>
-  props.kind === 'expense'
+  props.type === 'expense'
     ? 'Agrega tu primer gasto usando el formulario.'
     : 'Agrega tu primer ingreso usando el formulario.'
 )
 
 const editHoverClass = computed(() =>
-  props.kind === 'expense'
+  props.type === 'expense'
     ? 'hover:text-primary hover:bg-primary/10'
     : 'hover:text-income hover:bg-income/10'
 )
@@ -45,34 +49,27 @@ function openDetails(item: Transaction) {
   selectedItem.value = item
   isDetailOpen.value = true
 }
-
-function handleEditFromDetail() {
-  if (selectedItem.value) {
-    emit('edit', selectedItem.value)
-    isDetailOpen.value = false
-  }
-}
-
-function handleDeleteFromDetail() {
-  if (selectedItem.value) {
-    emit('delete', selectedItem.value)
-    isDetailOpen.value = false
-  }
-}
-
-function getAccountName(accountId: string | number) {
-  const account = accountsStore.accounts.find(a => String(a.id) === String(accountId))
-  return account ? account.name : 'Desconocida'
-}
 </script>
 
 <template>
   <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
     <div class="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
       <h2 class="text-base font-semibold text-gray-900">{{ title }}</h2>
-      <span class="text-xs text-gray-400 font-medium">
-        {{ items.length }} registro{{ items.length !== 1 ? 's' : '' }}
-      </span>
+      <div class="flex items-center gap-3">
+        <button
+          v-if="(deactivatedCount ?? 0) > 0"
+          type="button"
+          @click="emit('update:hideDeactivated', !hideDeactivated)"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition cursor-pointer"
+          :class="hideDeactivated ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+        >
+          <Icon :icon="hideDeactivated ? 'lucide:eye' : 'lucide:eye-off'" class="w-3.5 h-3.5" />
+          {{ hideDeactivated ? `Mostrar desactivados (${deactivatedCount})` : 'Ocultar desactivados' }}
+        </button>
+        <span class="text-xs text-gray-400 font-medium">
+          {{ items.length }} registro{{ items.length !== 1 ? 's' : '' }}
+        </span>
+      </div>
     </div>
 
     <div v-if="items.length === 0" class="py-14 text-center">
@@ -82,19 +79,18 @@ function getAccountName(accountId: string | number) {
     </div>
 
     <template v-else>
+      <!-- Mobile list view -->
       <div class="divide-y divide-gray-50 md:hidden">
-        <MovementRow
+        <MovementListItem
           v-for="item in items"
           :key="item.id"
           :item="item"
-          :edit-hover-class="editHoverClass"
           :show-account="true"
           @select="openDetails"
-          @edit="emit('edit', $event)"
-          @delete="emit('delete', $event)"
         />
       </div>
 
+      <!-- Desktop table view -->
       <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -109,15 +105,17 @@ function getAccountName(accountId: string | number) {
             </tr>
           </thead>
           <tbody>
-            <MovementRow
+            <MovementTableRow
               v-for="item in items"
               :key="item.id"
               :item="item"
               :edit-hover-class="editHoverClass"
               :show-account="true"
-              @select="openDetails"
               @edit="emit('edit', $event)"
+              @relocate="emit('relocate', $event)"
               @delete="emit('delete', $event)"
+              @restore="emit('restore', $event)"
+              @hard-delete="emit('hard-delete', $event)"
             />
           </tbody>
         </table>
@@ -125,55 +123,14 @@ function getAccountName(accountId: string | number) {
     </template>
   </div>
 
-  <AppFormDialog
+  <!-- Mobile Detail & Actions Modal -->
+  <MovementDetailModal
     v-model:open="isDetailOpen"
-    title="Detalle del movimiento"
-    :confirm-label="selectedItem?.deletedAt ? 'Aceptar' : 'Editar'"
-    :cancel-label="selectedItem?.deletedAt ? 'Cerrar' : 'Eliminar'"
-    @confirm="selectedItem?.deletedAt ? (isDetailOpen = false) : handleEditFromDetail()"
-    @cancel="selectedItem?.deletedAt ? (isDetailOpen = false) : handleDeleteFromDetail()"
-  >
-    <div v-if="selectedItem" class="space-y-4">
-      <div class="text-center pb-4 border-b border-gray-100">
-        <p class="text-3xl font-bold" :class="selectedItem.kind === 'income' ? 'text-income' : 'text-danger/80'">
-          {{ selectedItem.kind === 'income' ? '+' : '-' }}{{ formatAmount(selectedItem.amount) }}
-        </p>
-        <p class="text-base font-medium text-gray-800 mt-1" :class="{ 'line-through': selectedItem.deletedAt }">
-          {{ selectedItem.reason }}
-        </p>
-      </div>
-      
-      <div class="space-y-3 text-sm">
-        <div class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Estado</span>
-          <span class="font-bold px-2 py-0.5 rounded-md text-xs uppercase tracking-wide" :class="selectedItem.deletedAt ? 'bg-danger/10 text-danger' : 'bg-income/10 text-income'">
-            {{ selectedItem.deletedAt ? 'Anulado' : 'Completado' }}
-          </span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Fecha</span>
-          <span class="font-medium text-gray-900">{{ formatDate(selectedItem.createdAt) }}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Cuenta</span>
-          <span class="font-medium text-gray-900">{{ getAccountName(selectedItem.accountId) }}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Método de pago</span>
-          <span class="font-medium text-gray-900">{{ paymentLabel(selectedItem.paymentType) }}</span>
-        </div>
-        <div v-if="selectedItem.deletedAt" class="flex justify-between items-center">
-          <span class="text-gray-500 font-medium">Razón anulación</span>
-          <span class="font-medium text-danger">{{ selectedItem.deleteReason }}</span>
-        </div>
-      </div>
-
-      <div v-if="selectedItem.description" class="pt-3 border-t border-gray-100">
-        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Descripción</p>
-        <p class="text-sm text-gray-700 bg-gray-50 border border-gray-100 p-3 rounded-xl break-words whitespace-pre-wrap leading-relaxed">
-          {{ selectedItem.description }}
-        </p>
-      </div>
-    </div>
-  </AppFormDialog>
+    :item="selectedItem"
+    @edit="emit('edit', $event)"
+    @relocate="emit('relocate', $event)"
+    @delete="emit('delete', $event)"
+    @restore="emit('restore', $event)"
+    @hard-delete="emit('hard-delete', $event)"
+  />
 </template>

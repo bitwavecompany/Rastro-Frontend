@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AppToastContainer from '@/components/ui/AppToastContainer.vue'
+import DowngradeAccountsModal from '@/components/modals/DowngradeAccountsModal.vue'
+import SessionRevokedModal from '@/components/modals/SessionRevokedModal.vue'
 import { useProfileStore } from '@/stores/useProfileStore'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { useUserProfileQuery } from '@/composables/useUserProfileQuery'
+import { syncEngine } from '@/sync/SyncEngine'
 
 const route = useRoute()
 const profileStore = useProfileStore()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 
+// TanStack Query gestiona el estado del perfil con staleTime: 5m y polling cada 60s
+useUserProfileQuery()
+
 const isAppReady = ref(false)
 
 const noLayoutRoutes = ['/login', '/register', '/admin/login', '/admin/dashboard']
 const useLayout = computed(() => !noLayoutRoutes.includes(route.path))
-
-watch(() => route.path, () => {
-  if (isAppReady.value && useLayout.value) {
-    profileStore.silentSync()
-  }
-})
 
 onMounted(async () => {
   await Promise.all([
@@ -31,11 +32,17 @@ onMounted(async () => {
   ])
   
   isAppReady.value = true
+
+  // Start background sync
+  syncEngine.startAutoSync()
+  window.addEventListener('online', () => syncEngine.sync())
 })
 </script>
 
 <template>
   <AppToastContainer />
+  <DowngradeAccountsModal />
+  <SessionRevokedModal />
 
   <template v-if="isAppReady">
     <AppLayout v-if="useLayout" />

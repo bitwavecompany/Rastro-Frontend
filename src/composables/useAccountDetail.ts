@@ -1,61 +1,76 @@
 import { computed, ref } from 'vue'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
-import type { Transaction, TransactionKind } from '@/types/transaction'
+import type { Transaction } from '@/types/transaction'
 
 export type MovementTab = 'all' | 'incomes' | 'expenses'
+export type Movement = Transaction
 
-export type Movement = Transaction & { _type: TransactionKind }
-
-export function useAccountDetail(accountId: string | number) {
+export function useAccountDetail(accountId: string) {
   const accountsStore = useAccountsStore()
   const transactionsStore = useTransactionsStore()
 
   const activeTab = ref<MovementTab>('all')
+  const hideDeactivated = ref(false)
 
-  const account = computed(() =>
-    accountsStore.accounts.find(a => String(a.id) === String(accountId)) ?? null
+  const account = computed(() => {
+    return accountsStore.getAccountById(accountId) ?? null
+  })
+
+  const deactivatedCount = computed(() =>
+    transactionsStore.byAccount(accountId, undefined, true).filter(t => !!t.deleted_at).length
   )
 
-  const accountExpenses = computed(() =>
-    transactionsStore.byAccount(accountId, 'expense')
+  const movementsForAccount = computed(() => {
+    return transactionsStore.byAccount(accountId, undefined, !hideDeactivated.value)
+  })
+
+  // PRD 3.3: Only active transactions affect account balance
+  const activeExpenses = computed(() =>
+    transactionsStore.byAccount(accountId, 'expense', false)
   )
 
-  const accountIncomes = computed(() =>
-    transactionsStore.byAccount(accountId, 'income')
+  const activeIncomes = computed(() =>
+    transactionsStore.byAccount(accountId, 'income', false)
   )
 
   const totalExpenses = computed(() =>
-    accountExpenses.value.filter(t => !t.deletedAt).reduce((sum, t) => sum + t.amount, 0)
+    activeExpenses.value.reduce((sum, t) => sum + Number(t.amount), 0)
   )
 
   const totalIncomes = computed(() =>
-    accountIncomes.value.filter(t => !t.deletedAt).reduce((sum, t) => sum + t.amount, 0)
+    activeIncomes.value.reduce((sum, t) => sum + Number(t.amount), 0)
   )
 
-  const balance = computed(() =>
-    (account.value?.amount ?? 0) + totalIncomes.value - totalExpenses.value
-  )
+  const balance = computed(() => {
+    const initial = Number(account.value?.initial_balance ?? 0)
+    return initial + totalIncomes.value - totalExpenses.value
+  })
 
   const filteredMovements = computed<Movement[]>(() => {
-    const inc = accountIncomes.value.map(t => ({ ...t, _type: 'income' as const }))
-    const exp = accountExpenses.value.map(t => ({ ...t, _type: 'expense' as const }))
-    const all = [...inc, ...exp].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    if (activeTab.value === 'incomes') return all.filter(m => m._type === 'income')
-    if (activeTab.value === 'expenses') return all.filter(m => m._type === 'expense')
-    return all
+    const sorted = [...movementsForAccount.value].sort((a, b) => {
+      const dateA = new Date(a.date || a.created_at || 0).getTime()
+      const dateB = new Date(b.date || b.created_at || 0).getTime()
+      return dateB - dateA
+    })
+
+    if (activeTab.value === 'incomes') return sorted.filter(m => m.type === 'income')
+    if (activeTab.value === 'expenses') return sorted.filter(m => m.type === 'expense')
+    return sorted
   })
 
   return {
     account,
     activeTab,
-    accountExpenses,
-    accountIncomes,
+    hideDeactivated,
+    deactivatedCount,
     totalExpenses,
     totalIncomes,
     balance,
     filteredMovements,
+    restoreMovement: transactionsStore.restore,
+    relocateMovement: transactionsStore.relocate,
+    hardDeleteMovement: transactionsStore.hardDelete,
+    purgeAccountMovements: () => transactionsStore.purgeAccount(accountId),
   }
 }
