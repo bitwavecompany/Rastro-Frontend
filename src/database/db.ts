@@ -2,38 +2,31 @@ import Dexie, { type Table } from 'dexie'
 import type { Account } from '@/types/account'
 import type { Transaction } from '@/types/transaction'
 import type { Profile } from '@/types/profile'
+import type { OutboxEntry } from '@/sync/types'
+
+export interface DlqEntry extends OutboxEntry {
+  errorCode: number
+  errorMessage: string
+  failedAt: string
+}
 
 export class RastroDatabase extends Dexie {
-  accounts!: Table<Account, string | number>
-  transactions!: Table<Transaction, string | number>
+  accounts!: Table<Account, string>
+  transactions!: Table<Transaction, string>
   profile!: Table<Profile, string>
+  outbox!: Table<OutboxEntry, number>
+  meta!: Table<{ key: string; value: unknown }, string>
+  dlq!: Table<DlqEntry, number>
 
   constructor() {
     super('RastroLocalDB')
-    
-    this.version(1).stores({
-      accounts: 'id, type',
-      transactions: 'id, kind, accountId, createdAt',
-      profile: 'id'
-    })
-    
-    this.version(2).stores({
-      accounts: 'id, type',
-      transactions: 'id, kind, accountId, createdAt',
-      profile: 'id'
-    }).upgrade(tx => {
-      return tx.table('profile').toCollection().modify(profile => {
-        if (profile.role) {
-          if (profile.role === 'premium') {
-            profile.roleToken = 'cHJlbWl1bV91bmxvY2tlZF8yMDI2'
-          } else if (profile.role === 'registered') {
-            profile.roleToken = 'cmVnaXN0ZXJlZF9sZXZlbF8yMDI2'
-          } else {
-            profile.roleToken = 'Z3Vlc3RfbGV2ZWxfMjAyNg=='
-          }
-          delete profile.role
-        }
-      })
+
+    // Schema v7: versión canónica sin versiones intermedias de prototipado (v3 a v6 eliminadas)
+    this.version(7).stores({
+      accounts: 'id, name, type, sync_status, created_at, deleted_at',
+      transactions: 'id, account_id, type, payment_method, date, sync_status, created_at, deleted_at, transfer_id',
+      outbox: 'opId, entity, op, createdAt, [status+createdAt]',
+      profile: 'id, updated_at',
     })
   }
 }

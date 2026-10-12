@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboard } from '@/composables/useDashboard'
 import { formatAmount, formatDate, getAccountIcon, getAccountColorClass } from '@/utils/formatters'
@@ -15,15 +14,6 @@ const {
   monthLabel,
   getAccountBalance
 } = useDashboard()
-
-const translatedMonthLabel = computed(() => {
-  const months: Record<string, string> = {
-    'January': 'enero', 'February': 'febrero', 'March': 'marzo', 'April': 'abril',
-    'May': 'mayo', 'June': 'junio', 'July': 'julio', 'August': 'agosto',
-    'September': 'septiembre', 'October': 'octubre', 'November': 'noviembre', 'December': 'diciembre'
-  }
-  return monthLabel.value.replace(/[a-zA-Z]+/, match => months[match] || match)
-})
 </script>
 
 <template>
@@ -33,7 +23,7 @@ const translatedMonthLabel = computed(() => {
       <div class="flex items-center justify-between gap-4 mb-2">
         <div>
           <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Inicio</h1>
-          <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ translatedMonthLabel }}</p>
+          <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ monthLabel }}</p>
         </div>
         <div class="flex items-center justify-center shrink-0">
           <img src="/imagotipo-blanco-big.jpg" alt="Rastro" class="h-10 w-auto object-contain" />
@@ -99,11 +89,12 @@ const translatedMonthLabel = computed(() => {
           </button>
         </div>
         <div class="divide-y divide-gray-50">
-          <div
+          <button
+            type="button"
             v-for="account in accounts"
             :key="account.id"
             @click="router.push({ name: 'account-detail', params: { id: account.id } })"
-            class="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-colors cursor-pointer"
+            class="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-all cursor-pointer active:scale-[0.98] active:bg-gray-50"
           >
             <div
               class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -113,10 +104,10 @@ const translatedMonthLabel = computed(() => {
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-800 truncate">{{ account.name }}</p>
-              <p class="text-xs text-gray-400">{{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}</p>
+              <p class="text-xs text-gray-500">{{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}</p>
             </div>
-            <p class="text-sm font-semibold text-gray-900 shrink-0">{{ formatAmount(getAccountBalance(account.id, account.amount)) }}</p>
-          </div>
+            <p class="text-sm font-semibold text-gray-900 shrink-0">{{ formatAmount(getAccountBalance(account.id, account.initial_balance)) }}</p>
+          </button>
         </div>
       </div>
 
@@ -137,33 +128,34 @@ const translatedMonthLabel = computed(() => {
         </div>
 
         <div v-else class="divide-y divide-gray-50">
-          <div
+          <button
+            type="button"
             v-for="t in recentTransactions"
-            :key="`${t.kind}-${t.id}`"
-            class="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-colors cursor-pointer"
-            @click="router.push({ name: t.kind === 'expense' ? 'expenses' : 'incomes' })"
+            :key="`${t.type}-${t.id}`"
+            class="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/60 transition-all cursor-pointer active:scale-[0.98] active:bg-gray-50"
+            @click="router.push({ name: t.type === 'expense' ? 'expenses' : 'incomes' })"
           >
             <div
               class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              :class="t.kind === 'income' ? 'bg-income/20' : 'bg-danger/20'"
+              :class="t.type === 'income' ? 'bg-income/20' : 'bg-danger/20'"
             >
               <Icon
-                :icon="t.kind === 'income' ? 'lucide:trending-up' : 'lucide:receipt'"
+                :icon="t.type === 'income' ? 'lucide:trending-up' : 'lucide:receipt'"
                 class="w-4 h-4"
-                :class="t.kind === 'income' ? 'text-income' : 'text-danger/80'"
+                :class="t.type === 'income' ? 'text-income' : 'text-danger/80'"
               />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-gray-800 truncate">{{ t.reason }}</p>
-              <p class="text-xs text-gray-400">{{ formatDate(t.createdAt) }}</p>
+              <p class="text-xs text-gray-500">{{ formatDate(t.date || t.created_at) }}</p>
             </div>
             <p
               class="text-sm font-semibold shrink-0"
-              :class="t.kind === 'income' ? 'text-income' : 'text-danger/80'"
+              :class="t.type === 'income' ? 'text-income' : 'text-danger/80'"
             >
-              {{ t.kind === 'income' ? '+' : '-' }}{{ formatAmount(t.amount) }}
+              {{ t.type === 'income' ? '+' : '-' }}{{ formatAmount(t.amount) }}
             </p>
-          </div>
+          </button>
         </div>
       </div>
 

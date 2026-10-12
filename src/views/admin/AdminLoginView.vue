@@ -3,11 +3,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/useToastStore'
 import { useProfileStore } from '@/stores/useProfileStore'
+import { useSessionStore } from '@/stores/useSessionStore'
 import api from '@/api/axios'
 
 const router = useRouter()
 const toast = useToastStore()
 const profileStore = useProfileStore()
+const sessionStore = useSessionStore()
 
 const form = ref({ email: '', password: '' })
 const isLoading = ref(false)
@@ -28,7 +30,7 @@ async function handleLogin() {
       password: form.value.password
     })
 
-    const { token, user } = response.data.data
+    const { token, refresh_token: refreshToken, user } = response.data.data
 
     // Validar que sea administrador
     if (user.role !== 'admin') {
@@ -36,26 +38,27 @@ async function handleLogin() {
       return
     }
 
-    localStorage.setItem('auth_token', token)
+    sessionStore.setTokens(token, refreshToken)
     
     await profileStore.save({
       id: String(user.id),
       name: user.name,
       email: user.email,
-      roleToken: 'admin_level_2026' // Token visual interno si se desea usar
+      role: 'admin',
     })
 
     toast.success('¡Bienvenido Administrador!')
     router.push('/admin/dashboard')
 
-  } catch (error: any) {
-    if (error.response?.status === 422) {
-      const errors = error.response.data.errors
-      errorMsg.value = errors[Object.keys(errors)[0]][0]
-    } else if (error.response?.status === 401 || error.response?.status === 404) {
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } }
+    if (err.response?.status === 422) {
+      const errors = err.response.data?.errors
+      errorMsg.value = errors ? errors[Object.keys(errors)[0]][0] : err.response.data?.message || 'Error de validación'
+    } else if (err.response?.status === 401 || err.response?.status === 404) {
       errorMsg.value = 'Credenciales incorrectas'
     } else {
-      errorMsg.value = error.response?.data?.message || 'Error al conectar con el servidor'
+      errorMsg.value = err.response?.data?.message || 'Error al conectar con el servidor'
     }
   } finally {
     isLoading.value = false
