@@ -10,6 +10,7 @@ import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
 import { useSessionStore } from '@/stores/useSessionStore'
 import { useUserProfileQuery } from '@/composables/useUserProfileQuery'
+import { useCategories } from '@/composables/useCategories'
 import { syncEngine } from '@/sync/SyncEngine'
 
 const route = useRoute()
@@ -17,6 +18,7 @@ const profileStore = useProfileStore()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const sessionStore = useSessionStore()
+const { fetchCategories } = useCategories()
 
 // TanStack Query gestiona el estado del perfil con staleTime: 5m y polling cada 60s
 useUserProfileQuery()
@@ -30,7 +32,8 @@ onMounted(async () => {
   await Promise.all([
     profileStore.load(),
     accountsStore.load(),
-    transactionsStore.load()
+    transactionsStore.load(),
+    fetchCategories(),
   ])
   
   isAppReady.value = true

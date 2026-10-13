@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
 import { useEntitlementsStore } from '@/stores/useEntitlementsStore'
+import { useCategories } from '@/composables/useCategories'
 import AppAmountInput from '@/components/ui/AppAmountInput.vue'
 import AppTypeToggle from '@/components/ui/AppTypeToggle.vue'
 import type { Transaction, CreateTransactionPayload } from '@/types/transaction'
@@ -28,6 +29,7 @@ const router = useRouter()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const entitlements = useEntitlementsStore()
+const { categories, getCategoryIcon } = useCategories()
 
 const amount = ref<number | ''>('')
 const reason = ref('')
@@ -35,7 +37,8 @@ const description = ref('')
 const payment_method = ref<PaymentMethod>('cash')
 const account_id = ref<string>('')
 const date = ref(dayjs().format('YYYY-MM-DD'))
-const errors = ref<Partial<Record<'amount' | 'reason' | 'account_id' | 'date', string>>>({})
+const category = ref<string>('comida')
+const errors = ref<Partial<Record<'amount' | 'reason' | 'account_id' | 'date' | 'category', string>>>({})
 
 // PRD Rule 1: Payment method reactively filters available accounts (cash -> cash, transfer -> bank)
 const targetAccountType = computed(() => payment_method.value === 'cash' ? 'cash' : 'bank')
@@ -114,6 +117,7 @@ function resetForm() {
   payment_method.value = 'cash'
   account_id.value = availableAccounts.value.length > 0 ? availableAccounts.value[0].id : ''
   date.value = dayjs().format('YYYY-MM-DD')
+  category.value = props.type === 'expense' ? 'comida' : ''
   errors.value = {}
 }
 
@@ -127,6 +131,7 @@ watch(
       payment_method.value = item.payment_method || 'cash'
       account_id.value = item.account_id
       date.value = dayjs(item.date || item.created_at).format('YYYY-MM-DD')
+      category.value = props.type === 'expense' ? (item.category || 'otros') : ''
       errors.value = {}
     } else {
       resetForm()
@@ -141,6 +146,11 @@ function validate(): boolean {
   if (!reason.value.trim()) errors.value.reason = 'Requerido'
   if (!account_id.value || availableAccounts.value.length === 0) {
     errors.value.account_id = emptyAccountsMessage.value?.text || 'Requerido'
+  }
+  if (props.type === 'expense') {
+    if (!category.value || !category.value.trim()) {
+      errors.value.category = 'Selecciona una categoría'
+    }
   }
   // PRD Rule 6: Validate account type matches payment method
   const selected = accountsStore.accounts.find(a => a.id === account_id.value)
@@ -160,6 +170,7 @@ function handleSubmit() {
     account_id: account_id.value,
     date: date.value || dayjs().format('YYYY-MM-DD'),
     description: description.value.trim() ? description.value.trim() : null,
+    category: props.type === 'expense' ? (category.value || 'otros') : null,
   })
   resetForm()
 }
@@ -210,7 +221,43 @@ function handleCancel() {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 gap-4" :class="props.type === 'expense' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'">
+      <!-- Selector de categoría obligatorio exclusivo para Gastos -->
+      <div v-if="props.type === 'expense'">
+        <label for="select-category" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+          Categoría <span class="text-danger/60">*</span>
+        </label>
+        <div class="relative">
+          <Icon
+            :icon="getCategoryIcon(category)"
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+          />
+          <select
+            id="select-category"
+            v-model="category"
+            :disabled="disabled"
+            class="w-full pl-9 pr-8 py-2 rounded-lg border text-sm text-gray-900 appearance-none
+                   focus:outline-none focus:ring-2 focus:border-transparent
+                   disabled:bg-gray-50 disabled:text-gray-400 transition bg-white"
+            :class="[focusClass, errors.category ? 'border-danger/60 bg-danger/10' : 'border-gray-300']"
+          >
+            <option value="" disabled>Selecciona una categoría</option>
+            <option
+              v-for="cat in categories"
+              :key="cat.id"
+              :value="cat.id"
+            >
+              {{ cat.name }}
+            </option>
+          </select>
+          <Icon
+            icon="lucide:chevron-down"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+          />
+        </div>
+        <p v-if="errors.category" class="mt-1 text-xs text-danger/80 leading-tight">{{ errors.category }}</p>
+      </div>
+
       <div>
         <label for="input-date" class="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
           Fecha

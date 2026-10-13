@@ -16,6 +16,7 @@ export type MovementFormData = {
   account_id: string
   type: TransactionType
   date?: string
+  category?: string | null
 }
 
 export type MovementFormErrors = Partial<Record<keyof MovementFormData, string>>
@@ -33,6 +34,7 @@ export function useMovementForm() {
     account_id: '',
     type: 'expense',
     date: dayjs().format('YYYY-MM-DD'),
+    category: 'comida',
   })
   const errors = reactive<MovementFormErrors>({})
   const isOpen = ref(false)
@@ -48,6 +50,7 @@ export function useMovementForm() {
       account_id: transaction.account_id,
       type: transaction.type,
       date: dayjs(transaction.date || transaction.created_at || new Date()).format('YYYY-MM-DD'),
+      category: transaction.type === 'expense' ? (transaction.category || 'otros') : null,
     })
     Object.keys(errors).forEach(key => delete (errors as Record<string, string | undefined>)[key])
     isOpen.value = true
@@ -90,6 +93,15 @@ export function useMovementForm() {
       return false
     }
 
+    if (form.type === 'expense') {
+      if (!form.category || !form.category.trim()) {
+        errors.category = 'La categoría es obligatoria para gastos'
+        return false
+      }
+    } else {
+      form.category = null
+    }
+
     return true
   }
 
@@ -102,6 +114,7 @@ export function useMovementForm() {
       payment_method: form.payment_method,
       type: form.type,
       account_id: form.account_id,
+      category: form.type === 'expense' ? (form.category || 'otros') : null,
       date: form.date ? (form.date.includes('T') ? form.date.split('T')[0] : form.date) : dayjs().format('YYYY-MM-DD'),
       description: form.description.trim() ? form.description.trim() : null,
     }

@@ -123,7 +123,7 @@ export interface Transaction {
   description?:     string | null;             // Notes / Relocation audit trail
   payment_method:   PaymentMethod;             // 'cash' | 'transfer'
   date:             string;                    // YYYY-MM-DD (required)
-  category?:        string | null;             // Reserved for categories
+  category?:        'comida' | 'transporte' | 'entretenimiento' | 'estudio' | 'trabajo' | 'otros' | null; // Mandatory for expense, null for income
   tags:             string[];                  // Tags / labels (default [])
   transfer_id?:     string | null;             // UUID for transfers
   deletion_reason?: string | null;             // Reason for deletion or relocation

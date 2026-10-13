@@ -14,6 +14,7 @@ export interface RegisterSyncAccountItem {
   id: string
   name: string
   type: Account['type']
+  initial_balance?: number
   amount: number
   description?: string | null
   currency: string

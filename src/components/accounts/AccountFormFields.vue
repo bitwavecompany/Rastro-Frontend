@@ -45,11 +45,10 @@ const accountTypeOptions: { value: AccountType; label: string; icon: string }[] 
     <AppAmountInput
       v-model="props.form.initial_balance"
       :error="props.errors.initial_balance"
-      :disabled="isDefaultAccount"
       min="0"
     />
-    <p v-if="isDefaultAccount" class="mt-1 text-[11px] text-gray-400">
-      El saldo inicial de la cuenta Efectivo por defecto no puede modificarse.
+    <p v-if="isDefaultAccount" class="mt-1 text-[11px] text-gray-500">
+      Puedes registrar o corregir el capital inicial de tu cuenta principal.
     </p>
   </div>
 

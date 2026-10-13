@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Transaction } from '@/types/transaction'
 import { formatAmount, formatDate } from '@/utils/formatters'
+import { getCategoryIcon, getCategoryName } from '@/constants/categories'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 
 const props = withDefaults(
@@ -31,7 +32,7 @@ const accountName = computed(() => {
 })
 
 const isIncome = computed(() => props.item.type === 'income')
-const kindIcon = computed(() => isIncome.value ? 'lucide:trending-up' : 'lucide:receipt')
+const kindIcon = computed(() => isIncome.value ? 'lucide:trending-up' : getCategoryIcon(props.item.category))
 const kindColorIcon = computed(() => isIncome.value ? 'text-income' : 'text-danger/80')
 const kindColorBg = computed(() => isIncome.value ? 'bg-income/20' : 'bg-danger/20')
 const kindColorText = computed(() => isIncome.value ? 'text-income' : 'text-danger/80')
@@ -52,7 +53,10 @@ const amountPrefix = computed(() => isIncome.value ? '+' : '-')
       </div>
     </td>
     <td class="px-6 py-4 text-gray-700 max-w-[160px] truncate font-medium" :class="{ 'line-through text-gray-400': isDeactivated }">
-      {{ item.reason }}
+      <div class="truncate">{{ item.reason }}</div>
+      <div v-if="!isIncome && item.category" class="text-[11px] text-gray-400 font-normal truncate">
+        {{ getCategoryName(item.category) }}
+      </div>
     </td>
     <td class="px-6 py-4 text-gray-500 max-w-xs truncate" :class="{ 'line-through text-gray-400': isDeactivated }">
       <span v-if="item.description">{{ item.description }}</span>

@@ -32,7 +32,9 @@ export class ApiPayloadAdapter {
               id: String(raw.id || entry.entityId),
               ...(raw.name !== undefined && { name: raw.name }),
               ...(raw.type !== undefined && { type: raw.type }),
-              ...(raw.initial_balance !== undefined && { initial_balance: Number(raw.initial_balance) }),
+              ...((raw.initial_balance !== undefined || raw.amount !== undefined) && {
+                initial_balance: Number(raw.initial_balance ?? raw.amount),
+              }),
               ...(raw.description !== undefined && { description: raw.description }),
             }
           } else if (entry.op === 'delete') {
@@ -46,6 +48,7 @@ export class ApiPayloadAdapter {
           }
         } else if (entry.entity === 'transactions') {
           if (entry.op === 'create') {
+            const isIncome = raw.type === 'income'
             finalPayload = {
               id: String(raw.id || entry.entityId),
               account_id: String(raw.account_id),
@@ -57,11 +60,14 @@ export class ApiPayloadAdapter {
               date: typeof raw.date === 'string'
                 ? (raw.date.includes('T') ? raw.date.split('T')[0] : raw.date)
                 : null,
-              category: raw.category ?? null,
+              category: isIncome
+                ? null
+                : (typeof raw.category === 'string' && raw.category.trim() ? raw.category.toLowerCase().trim() : 'otros'),
               tags: Array.isArray(raw.tags) ? raw.tags : [],
               transfer_id: raw.transfer_id ?? null,
             }
           } else if (entry.op === 'update') {
+            const isIncome = raw.type === 'income'
             finalPayload = {
               id: String(raw.id || entry.entityId),
               ...(raw.account_id ? { account_id: String(raw.account_id) } : {}),
@@ -71,6 +77,13 @@ export class ApiPayloadAdapter {
               ...(raw.payment_method ? { payment_method: raw.payment_method } : {}),
               ...(raw.description !== undefined ? { description: raw.description } : {}),
               ...(raw.date ? { date: typeof raw.date === 'string' && raw.date.includes('T') ? raw.date.split('T')[0] : raw.date } : {}),
+              ...(isIncome
+                ? { category: null }
+                : (raw.category !== undefined
+                    ? { category: (typeof raw.category === 'string' && raw.category.trim()) ? raw.category.toLowerCase().trim() : 'otros' }
+                    : (raw.type === 'expense' ? { category: 'otros' } : {})
+                  )
+              ),
             }
           } else if (entry.op === 'delete') {
             finalPayload = {

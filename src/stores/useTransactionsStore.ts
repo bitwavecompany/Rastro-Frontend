@@ -54,6 +54,16 @@ export const useTransactionsStore = defineStore('transactions', () => {
   async function load() {
     try {
       const data = await db.transactions.toArray()
+      for (const t of data) {
+        if (t.type === 'expense' && (!t.category || !t.category.trim())) {
+          t.category = 'otros'
+          await db.transactions.update(t.id, { category: 'otros' })
+        } else if (t.type === 'income' && t.category) {
+          t.category = null
+          await db.transactions.update(t.id, { category: null })
+        }
+      }
+
       // Sort by date descending (fallback to created_at)
       _transactions.value = data.sort((a, b) => {
         const dateA = new Date(a.date || a.created_at || 0).getTime()
@@ -73,6 +83,10 @@ export const useTransactionsStore = defineStore('transactions', () => {
     const paymentMethod = payload.payment_method || 'cash'
     const accountId = payload.account_id
     const date = normalizeDate(payload.date)
+    const isIncome = type === 'income'
+    const category = isIncome
+      ? null
+      : (typeof payload.category === 'string' && payload.category.trim() ? payload.category.trim() : 'otros')
 
     // PRD Rule 6: Transaction can only be associated with an active account of the matching type
     const accountsStore = useAccountsStore()
@@ -94,7 +108,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       payment_method: paymentMethod,
       account_id: accountId,
       date,
-      category: null,
+      category,
       tags: [],
       transfer_id: payload.transfer_id ?? null,
       created_at: now,
@@ -130,10 +144,21 @@ export const useTransactionsStore = defineStore('transactions', () => {
       throw new Error('Payment method does not match the associated account type.')
     }
 
+    const effectiveType = payload.type || currentTx.type
+    let nextCategory = currentTx.category
+    if (effectiveType === 'income') {
+      nextCategory = null
+    } else if (payload.category !== undefined) {
+      nextCategory = (typeof payload.category === 'string' && payload.category.trim()) ? payload.category.trim() : 'otros'
+    } else if (!nextCategory) {
+      nextCategory = 'otros'
+    }
+
     const now = new Date().toISOString()
     const updatedTransaction: Transaction = {
       ..._transactions.value[index],
       ...payload,
+      category: nextCategory,
       ...(payload.amount !== undefined && { amount: Number(payload.amount) }),
       ...(payload.date !== undefined && {
         date: normalizeDate(payload.date),
@@ -144,7 +169,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
     _transactions.value[index] = updatedTransaction
     await db.transactions.put(toPlainObject(updatedTransaction))
-    await enqueueOutbox('transactions', id, 'update', toPlainObject(payload))
+    const outboxPayload = {
+      ...payload,
+      category: nextCategory,
+    }
+    await enqueueOutbox('transactions', id, 'update', toPlainObject(outboxPayload))
   }
 
   // PRD 6.1: Soft delete
@@ -312,7 +341,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       payment_method: destPaymentMethod,
       account_id: destinationAccountId,
       date: currentTx.date, // Rule 8: preserves original transaction date
-      category: currentTx.category ?? null,
+      category: currentTx.type === 'income' ? null : (currentTx.category ?? 'otros'),
       tags: [...(currentTx.tags || [])],
       transfer_id: null,
       created_at: now,

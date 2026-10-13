@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
@@ -57,6 +57,40 @@ const deleteAccount = useDeleteConfirm<Account>()
 const deleteMovement = useDeleteConfirm<Movement>()
 const hardDeleteMovementConfirm = useDeleteConfirm<Movement>()
 const isPurgeModalOpen = ref(false)
+const isActionMenuOpen = ref(false)
+
+function handleEditAction() {
+  isActionMenuOpen.value = false
+  if (account.value) {
+    accountForm.open(account.value)
+  }
+}
+
+function handlePurgeAction() {
+  isActionMenuOpen.value = false
+  isPurgeModalOpen.value = true
+}
+
+function handleDeleteAction() {
+  isActionMenuOpen.value = false
+  if (account.value && !isDefaultAccount.value) {
+    deleteAccount.request(account.value)
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isActionMenuOpen.value) {
+    isActionMenuOpen.value = false
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 
 // Estado de traslado (Regla 7)
 const relocatingItem = ref<Transaction | null>(null)
@@ -230,25 +264,34 @@ async function handlePurgeAccountConfirm() {
   </div>
 
   <div v-else class="min-h-full bg-gray-50">
-    <div class="bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-3">
+    <div class="bg-white border-b border-gray-100 px-4 sm:px-6 py-3.5 sm:py-4 flex items-center gap-3">
       <button
         @click="goBack"
-        class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400
-               hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+        class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-xl text-gray-400
+               hover:bg-gray-100 hover:text-gray-700 active:bg-gray-200 transition-colors shrink-0"
+        aria-label="Volver a cuentas"
       >
         <Icon icon="lucide:arrow-left" class="w-4 h-4" />
       </button>
       <div class="flex-1 min-w-0">
-        <h1 class="text-base font-bold text-gray-900 truncate">{{ account.name }}</h1>
-        <p class="text-xs text-gray-400">
+        <div class="flex items-center gap-2 min-w-0">
+          <h1 class="text-base font-bold text-gray-900 truncate">{{ account.name }}</h1>
+          <span
+            v-if="isDefaultAccount"
+            class="shrink-0 text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap"
+          >
+            Por defecto
+          </span>
+        </div>
+        <p class="text-xs text-gray-400 truncate">
           {{ account.type === 'cash' ? 'Efectivo' : 'Banco' }}
           <span v-if="account.description"> · {{ account.description }}</span>
-          <span v-if="isDefaultAccount" class="ml-1 text-[10px] font-bold text-gray-600 bg-gray-100 px-1 py-0.5 rounded">Por defecto</span>
         </p>
       </div>
-      <div class="flex items-center gap-1 shrink-0">
+
+      <!-- Acciones en Desktop (sm en adelante) -->
+      <div class="hidden sm:flex items-center gap-1.5 shrink-0">
         <button
-          v-if="!isDefaultAccount"
           @click="accountForm.open(account)"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200
                  text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
@@ -275,6 +318,76 @@ async function handlePurgeAccountConfirm() {
           <Icon icon="lucide:eraser" class="w-3.5 h-3.5" />
           Vaciar
         </button>
+      </div>
+
+      <!-- Acciones en Mobile (< sm): Menú desplegable -->
+      <div class="sm:hidden relative shrink-0">
+        <button
+          type="button"
+          @click="isActionMenuOpen = !isActionMenuOpen"
+          class="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600
+                 hover:bg-gray-50 active:bg-gray-100 transition-colors focus:outline-none"
+          :class="{ 'bg-gray-100 text-gray-900 border-gray-300': isActionMenuOpen }"
+          aria-label="Opciones de cuenta"
+          :aria-expanded="isActionMenuOpen"
+        >
+          <Icon icon="lucide:more-vertical" class="w-4 h-4" />
+        </button>
+
+        <!-- Backdrop para cerrar al hacer clic afuera (mobile) -->
+        <div
+          v-if="isActionMenuOpen"
+          class="fixed inset-0 z-40 bg-black/10 transition-opacity"
+          @click="isActionMenuOpen = false"
+        />
+
+        <!-- Menú desplegable con animación -->
+        <Transition
+          enter-active-class="transition duration-150 ease-out"
+          enter-from-class="opacity-0 scale-95 -translate-y-1"
+          enter-to-class="opacity-100 scale-100 translate-y-0"
+          leave-active-class="transition duration-100 ease-in"
+          leave-from-class="opacity-100 scale-100 translate-y-0"
+          leave-to-class="opacity-0 scale-95 -translate-y-1"
+        >
+          <div
+            v-if="isActionMenuOpen"
+            class="absolute right-0 top-full mt-1.5 z-50 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 overflow-hidden"
+          >
+            <button
+              type="button"
+              @click="handleEditAction"
+              class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-gray-700
+                     hover:bg-gray-50 active:bg-gray-100 transition-colors text-left"
+            >
+              <Icon icon="lucide:pencil" class="w-4 h-4 text-gray-500 shrink-0" />
+              <span>Editar cuenta</span>
+            </button>
+
+            <button
+              type="button"
+              @click="handlePurgeAction"
+              class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-gray-700
+                     hover:bg-amber-50 active:bg-amber-100 hover:text-amber-800 transition-colors text-left"
+            >
+              <Icon icon="lucide:eraser" class="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Vaciar movimientos</span>
+            </button>
+
+            <template v-if="!isDefaultAccount">
+              <div class="h-px bg-gray-100 my-1" />
+              <button
+                type="button"
+                @click="handleDeleteAction"
+                class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-danger
+                       hover:bg-danger/10 active:bg-danger/20 transition-colors text-left"
+              >
+                <Icon icon="lucide:trash-2" class="w-4 h-4 text-danger shrink-0" />
+                <span>Desactivar cuenta</span>
+              </button>
+            </template>
+          </div>
+        </Transition>
       </div>
     </div>
 

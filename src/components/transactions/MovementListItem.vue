@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Transaction } from '@/types/transaction'
 import { formatAmount, formatDate } from '@/utils/formatters'
+import { getCategoryIcon, getCategoryName } from '@/constants/categories'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 
 const props = withDefaults(
@@ -26,7 +27,7 @@ const accountName = computed(() => {
 })
 
 const isIncome = computed(() => props.item.type === 'income')
-const kindIcon = computed(() => isIncome.value ? 'lucide:trending-up' : 'lucide:receipt')
+const kindIcon = computed(() => isIncome.value ? 'lucide:trending-up' : getCategoryIcon(props.item.category))
 const kindColorIcon = computed(() => isIncome.value ? 'text-income' : 'text-danger/80')
 const kindColorBg = computed(() => isIncome.value ? 'bg-income/20' : 'bg-danger/20')
 const kindColorText = computed(() => isIncome.value ? 'text-income' : 'text-danger/80')
@@ -51,7 +52,8 @@ const amountPrefix = computed(() => isIncome.value ? '+' : '-')
       <p class="text-sm font-medium text-gray-800 truncate">{{ item.reason }}</p>
       <p class="text-xs text-gray-500 mt-0.5 truncate">
         <span v-if="showAccount" class="font-medium text-gray-600">{{ accountName }} &middot; </span>
-        {{ formatDate(item.date || item.created_at || '') }}
+        <span>{{ formatDate(item.date || item.created_at || '') }}</span>
+        <span v-if="!isIncome && item.category" class="text-gray-400"> &middot; {{ getCategoryName(item.category) }}</span>
       </p>
     </div>
 

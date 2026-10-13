@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import AppFormDialog from '@/components/ui/AppFormDialog.vue'
 import { formatAmount, formatDate } from '@/utils/formatters'
+import { getCategoryIcon, getCategoryName } from '@/constants/categories'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import type { Transaction } from '@/types/transaction'
 
@@ -100,6 +101,13 @@ function handleHardDelete() {
           <span class="text-gray-500 font-medium">Método de pago</span>
           <span class="font-medium text-gray-900">
             {{ item.payment_method === 'transfer' ? 'Transferencia' : 'Efectivo' }}
+          </span>
+        </div>
+        <div v-if="item.type === 'expense'" class="flex justify-between items-center">
+          <span class="text-gray-500 font-medium">Categoría</span>
+          <span class="font-medium text-gray-900 flex items-center gap-1.5">
+            <Icon :icon="getCategoryIcon(item.category)" class="w-4 h-4 text-gray-500" />
+            {{ getCategoryName(item.category) }}
           </span>
         </div>
         <div v-if="item.deleted_at" class="flex justify-between items-center">

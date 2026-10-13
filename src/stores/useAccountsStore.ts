@@ -107,8 +107,14 @@ export const useAccountsStore = defineStore('accounts', () => {
     const account = _accounts.value.find(a => a.id === id)
     if (!account) return
 
-    if (account.id === defaultAccountId.value || account.is_default) {
-      throw new Error('Default account cannot be modified')
+    const isDefaultAcc = account.id === defaultAccountId.value || account.is_default
+    if (isDefaultAcc) {
+      if (payload.type && payload.type !== 'cash') {
+        throw new Error('El tipo de la cuenta por defecto no puede modificarse')
+      }
+      if (payload.name && payload.name.trim().toLowerCase() !== 'efectivo') {
+        throw new Error('El nombre de la cuenta por defecto no puede modificarse')
+      }
     }
 
     const index = _accounts.value.findIndex(a => a.id === id)
@@ -116,6 +122,10 @@ export const useAccountsStore = defineStore('accounts', () => {
     const updatedAccount: Account = {
       ..._accounts.value[index],
       ...payload,
+      ...(isDefaultAcc && {
+        name: 'Efectivo',
+        type: 'cash',
+      }),
       ...(payload.initial_balance !== undefined && {
         initial_balance: Number(payload.initial_balance),
       }),

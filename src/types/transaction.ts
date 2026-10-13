@@ -1,5 +1,13 @@
 import { z } from 'zod'
 import { PAYMENT_METHODS, TRANSACTION_TYPES } from '@/constants/transactions'
+import { CATEGORY_IDS } from '@/constants/categories'
+import type { CategoryId, TransactionCategoryItem } from '@/constants/categories'
+
+export { CATEGORY_IDS }
+export type { CategoryId, TransactionCategoryItem }
+export type TransactionCategory = CategoryId
+
+export const TransactionCategorySchema = z.enum(CATEGORY_IDS)
 
 export const TransactionSchema = z.object({
   id: z.string(),
@@ -21,7 +29,7 @@ export const TransactionSchema = z.object({
   sync_status: z.enum(['synced', 'pending_create', 'pending_update', 'pending_delete']).default('pending_create'),
 })
 
-export const CreateTransactionSchema = z.object({
+export const BaseCreateTransactionSchema = z.object({
   account_id: z.string().min(1, 'Account is required'),
   type: z.enum(TRANSACTION_TYPES),
   amount: z.number().positive('Amount must be greater than 0'),
@@ -34,7 +42,17 @@ export const CreateTransactionSchema = z.object({
   transfer_id: z.string().nullable().optional(),
 })
 
-export const UpdateTransactionSchema = CreateTransactionSchema.partial()
+export const CreateTransactionSchema = BaseCreateTransactionSchema.superRefine((data, ctx) => {
+  if (data.type === 'expense' && (!data.category || data.category.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'La categoría es obligatoria para gastos',
+      path: ['category'],
+    })
+  }
+})
+
+export const UpdateTransactionSchema = BaseCreateTransactionSchema.partial()
 
 export interface RelocateTransactionPayload {
   id: string
