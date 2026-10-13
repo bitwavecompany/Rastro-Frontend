@@ -29,7 +29,7 @@ export class SyncEngine {
   /**
    * PUSH: Process pending operations from local outbox table to the server.
    */
-  async push(): Promise<void> {
+  async push(rethrowError = false): Promise<void> {
     try {
       const outboxEntries = await db.outbox.orderBy('createdAt').toArray()
       if (outboxEntries.length === 0) return
@@ -81,19 +81,22 @@ export class SyncEngine {
         }
       } catch (error: unknown) {
         console.error('[SyncEngine] Network/Server Error during Batch Push', error)
+        if (rethrowError) throw error
       }
     } catch (err: unknown) {
       console.error('[SyncEngine] Error reading outbox during Push', err)
+      if (rethrowError) throw err
     }
   }
 
   /**
    * PULL: Hydrate changes from server to local database (Dexie).
+   * Supports full reconciliation pruning when forceFull is true or since is null.
    */
-  async pull(): Promise<void> {
+  async pull(forceFull = false, rethrowError = false): Promise<void> {
     try {
-      const since = tokenStorage.getLastSyncTime()
-      const response = await syncApi.pull(since)
+      const since = forceFull ? null : tokenStorage.getLastSyncTime()
+      const response = await syncApi.pull(since ?? undefined)
       const pullData = response.data?.data
 
       if (!pullData) return
@@ -112,10 +115,14 @@ export class SyncEngine {
       let accountsChanged = false
       let transactionsChanged = false
 
+      const serverAccountIds = new Set<string>()
+      const serverTransactionIds = new Set<string>()
+
       // Hydrate Accounts
-      if (Array.isArray(accounts) && accounts.length > 0) {
+      if (Array.isArray(accounts)) {
         for (const rawAcc of accounts as SyncPullAccountItem[]) {
           const accId = String(rawAcc.id)
+          serverAccountIds.add(accId)
           if (pendingAccountIds.has(accId)) continue
 
           const canonicalAccount: Account = {
@@ -140,9 +147,10 @@ export class SyncEngine {
       }
 
       // Hydrate Transactions
-      if (Array.isArray(transactions) && transactions.length > 0) {
+      if (Array.isArray(transactions)) {
         for (const rawTrx of transactions as SyncPullTransactionItem[]) {
           const trxId = String(rawTrx.id)
+          serverTransactionIds.add(trxId)
           if (pendingTransactionIds.has(trxId)) continue
 
           let category = rawTrx.category ?? null
@@ -178,6 +186,27 @@ export class SyncEngine {
         }
       }
 
+      // Reconciliación completa: Si fue un pull completo (forceFull o sin checkpoint previo),
+      // purgar registros locales que fueron eliminados permanentemente en el servidor
+      // siempre que no tengan mutaciones locales pendientes en outbox.
+      if (forceFull || !since) {
+        const localAccounts = await db.accounts.toArray()
+        for (const localAcc of localAccounts) {
+          if (!serverAccountIds.has(localAcc.id) && !pendingAccountIds.has(localAcc.id)) {
+            await db.accounts.delete(localAcc.id)
+            accountsChanged = true
+          }
+        }
+
+        const localTransactions = await db.transactions.toArray()
+        for (const localTx of localTransactions) {
+          if (!serverTransactionIds.has(localTx.id) && !pendingTransactionIds.has(localTx.id)) {
+            await db.transactions.delete(localTx.id)
+            transactionsChanged = true
+          }
+        }
+      }
+
       // Save server_time checkpoint for subsequent incremental pulls
       if (server_time) {
         tokenStorage.setLastSyncTime(server_time)
@@ -197,20 +226,23 @@ export class SyncEngine {
       }
     } catch (error: unknown) {
       console.error('[SyncEngine] Network/Server Error during Sync Pull', error)
+      if (rethrowError) throw error
     }
   }
 
   /**
    * Full bidirectional synchronization cycle: Push local pending outbox then Pull server updates.
+   * @param forceFull If true, forces a full pull without incremental since filter to reconcile all records.
+   * @param rethrowError If true, throws network or server errors to the caller (useful for manual sync UI feedback).
    */
-  async sync(): Promise<void> {
+  async sync(forceFull = false, rethrowError = false): Promise<void> {
     if (this.isFrozen.value || this.isSyncing.value) return
     if (!tokenStorage.hasAccessToken()) return
 
     this.isSyncing.value = true
     try {
-      await this.push()
-      await this.pull()
+      await this.push(rethrowError)
+      await this.pull(forceFull, rethrowError)
     } finally {
       this.isSyncing.value = false
     }

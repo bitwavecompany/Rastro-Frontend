@@ -263,6 +263,12 @@ export const useAccountsStore = defineStore('accounts', () => {
     return defaultCash
   }
 
+  async function clearAll() {
+    _accounts.value = []
+    await db.accounts.clear()
+    isLoaded.value = false
+  }
+
   return {
     accounts,
     allAccounts,
@@ -277,6 +283,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     restore,
     hardDelete,
     resetToGuest,
+    clearAll,
     load,
   }
 })

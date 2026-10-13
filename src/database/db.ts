@@ -15,7 +15,6 @@ export class RastroDatabase extends Dexie {
   transactions!: Table<Transaction, string>
   profile!: Table<Profile, string>
   outbox!: Table<OutboxEntry, number>
-  meta!: Table<{ key: string; value: unknown }, string>
   dlq!: Table<DlqEntry, number>
 
   constructor() {
@@ -27,6 +26,11 @@ export class RastroDatabase extends Dexie {
       transactions: 'id, account_id, type, payment_method, date, sync_status, created_at, deleted_at, transfer_id',
       outbox: 'opId, entity, op, createdAt, [status+createdAt]',
       profile: 'id, updated_at',
+    })
+
+    // Schema v8: Dead Letter Queue (DLQ) para operaciones rechazadas (403, 422)
+    this.version(8).stores({
+      dlq: '++seq, opId, entity, entityId, errorCode, failedAt',
     })
   }
 }

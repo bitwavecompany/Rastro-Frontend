@@ -38,27 +38,27 @@ onMounted(async () => {
   
   isAppReady.value = true
 
-  // Disparar sincronización bidireccional inicial con el servidor
-  syncEngine.sync()
+  // Disparar sincronización bidireccional inicial completa con el servidor (reconciliación)
+  syncEngine.sync(true)
 
-  // Iniciar sincronización periódica en segundo plano (cada 25 segundos)
-  syncEngine.startAutoSync(25000)
+  // Iniciar sincronización periódica en segundo plano (cada 20 segundos)
+  syncEngine.startAutoSync(20000)
 
   // Triggers de sincronización multidispositivo / móvil
-  window.addEventListener('online', () => syncEngine.sync())
+  window.addEventListener('online', () => syncEngine.sync(true))
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      syncEngine.sync()
+      syncEngine.sync(true)
     }
   })
 
   window.addEventListener('focus', () => {
-    syncEngine.sync()
+    syncEngine.sync(true)
   })
 
   document.addEventListener('resume', () => {
-    syncEngine.sync()
+    syncEngine.sync(true)
   })
 
   // Sincronización multi-pestaña: si otra pestaña cambia de sesión o cierra sesión,

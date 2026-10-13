@@ -14,11 +14,11 @@ async function handleManualSync() {
   if (syncEngine.isSyncing.value) return
   toast.info('Sincronizando datos con la nube...')
   try {
-    await syncEngine.sync()
+    await syncEngine.sync(true, true)
     toast.success('Datos actualizados')
   } catch (error: unknown) {
-    const err = error as { message?: string }
-    toast.error(err.message || 'Error al sincronizar datos')
+    console.error('[ManualSync] Error:', error)
+    toast.error('No se pudo conectar con el servidor. Revisa tu conexión de red.')
   }
 }
 

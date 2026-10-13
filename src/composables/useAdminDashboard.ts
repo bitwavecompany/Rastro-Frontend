@@ -2,7 +2,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminApi } from '@/api/admin'
 import { useToastStore } from '@/stores/useToastStore'
-import { useSessionStore } from '@/stores/useSessionStore'
+import { useProfileStore } from '@/stores/useProfileStore'
 import type { PremiumRequest, Profile } from '@/types/profile'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -14,7 +14,6 @@ dayjs.locale('es')
 export function useAdminDashboard() {
   const router = useRouter()
   const toast = useToastStore()
-  const sessionStore = useSessionStore()
 
   // Navigation tab state
   const activeTab = ref<'users' | 'requests'>('users')
@@ -266,8 +265,9 @@ export function useAdminDashboard() {
     }
   }
 
-  function handleLogout() {
-    sessionStore.clearTokens()
+  async function handleLogout() {
+    const profileStore = useProfileStore()
+    await profileStore.clearAllLocalData()
     router.push('/admin/login')
   }
 

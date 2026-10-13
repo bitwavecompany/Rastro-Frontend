@@ -412,6 +412,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
     isLoaded.value = true
   }
 
+  async function clearAll() {
+    _transactions.value = []
+    await db.transactions.clear()
+    isLoaded.value = false
+  }
+
   return {
     transactions,
     allTransactions,
@@ -435,6 +441,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     byAccount,
     getAccountBalance,
     reset,
+    clearAll,
     load,
   }
 })

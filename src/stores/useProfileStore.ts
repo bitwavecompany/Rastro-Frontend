@@ -115,28 +115,23 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   async function clearAllLocalData() {
+    syncEngine.stopAutoSync()
     session.clearTokens()
     syncEngine.resetSyncCheckpoint()
 
-    // 1. Limpiar colas de sincronización y metadatos en IndexedDB
-    await Promise.all([
-      db.outbox.clear(),
-      db.meta.clear(),
-      db.dlq.clear(),
-      db.profile.clear(),
-    ])
+    // 1. Limpiar todas las tablas de IndexedDB dinámicamente
+    await Promise.all(db.tables.map(table => table.clear()))
 
-    // 2. Restablecer perfil de Invitado en memoria y Dexie
-    profile.value = { id: generateLocalUserId(), ...EMPTY_PROFILE }
-    await db.profile.put(toPlainObject(profile.value))
-
-    // 3. Restablecer cuentas al estado inicial de Invitado (solo cuenta "Efectivo")
+    // 2. Limpiar estado reactivo en memoria de los stores
     const accountsStore = useAccountsStore()
-    await accountsStore.resetToGuest()
+    await accountsStore.clearAll()
 
-    // 4. Restablecer transacciones (vacías en memoria y Dexie)
     const transactionsStore = useTransactionsStore()
-    await transactionsStore.reset()
+    await transactionsStore.clearAll()
+
+    // 3. Restablecer perfil base en memoria sin persistir en Dexie para dejar DB 100% limpia
+    profile.value = { id: generateLocalUserId(), ...EMPTY_PROFILE }
+    isLoaded.value = false
   }
 
   return {
