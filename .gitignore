@@ -43,3 +43,4 @@ Thumbs.db
 *.temp
 rebuild-graph.ts
 graphify-out
+ngrok.exe

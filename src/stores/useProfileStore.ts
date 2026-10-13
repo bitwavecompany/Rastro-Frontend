@@ -6,6 +6,7 @@ import { authApi } from '@/api/auth'
 import { useSessionStore } from './useSessionStore'
 import { useAccountsStore } from './useAccountsStore'
 import { useTransactionsStore } from './useTransactionsStore'
+import { syncEngine } from '@/sync/SyncEngine'
 import type { Profile } from '@/types/profile'
 
 function generateLocalUserId(): string {
@@ -115,6 +116,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   async function clearAllLocalData() {
     session.clearTokens()
+    syncEngine.resetSyncCheckpoint()
 
     // 1. Limpiar colas de sincronización y metadatos en IndexedDB
     await Promise.all([

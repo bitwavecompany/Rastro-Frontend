@@ -45,3 +45,51 @@ export interface SyncBatchResponse {
   }
   results?: SyncOperationResult[]
 }
+
+export interface SyncPullAccountItem {
+  id: string
+  user_id?: string | null
+  name: string
+  type: 'cash' | 'bank'
+  amount?: number
+  initial_balance?: number
+  description?: string | null
+  currency?: string
+  is_default?: boolean
+  deactivation_reason?: 'user_action' | 'plan_downgrade' | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface SyncPullTransactionItem {
+  id: string
+  account_id: string
+  user_id?: string | null
+  type: 'income' | 'expense'
+  amount: number
+  reason: string
+  description?: string | null
+  payment_method: 'cash' | 'transfer'
+  date: string
+  category?: string | null
+  tags?: string[]
+  transfer_id?: string | null
+  deletion_reason?: string | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface SyncPullData {
+  server_time: string
+  accounts: SyncPullAccountItem[]
+  transactions: SyncPullTransactionItem[]
+}
+
+export interface SyncPullResponse {
+  success: boolean
+  message: string
+  data: SyncPullData
+  meta?: null
+}

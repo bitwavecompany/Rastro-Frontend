@@ -46,8 +46,7 @@ The upgrade to Premium is done via bank transfer or in-person cash payment, with
 
 - **Accounts:** creation, editing, and deactivation of `cash` and `bank` type accounts. "Cash" account is automatically created upon first use; it is permanent and its type cannot be changed, but its initial balance can be edited to register opening capital.
 - **Transactions:** logging, editing, and deactivating incomes and expenses associated with an account. Expenses require a category defined by the backend catalog (Food, Transport, Entertainment, Study, Work, Other). Relocation of transactions between accounts as a historical correction operation.
-- **Dashboard:** total net worth, monthly incomes, monthly expenses, monthly net balance, and last 8 active transactions — calculated locally without server requests.
-- **Offline Synchronization:** Outbox pattern with a user-visible Dead Letter Queue (DLQ) for operations rejected by the server.
+- **Offline & Multi-Device Synchronization:** Bidirectional Outbox pattern (Push via `POST /api/sync/push`) with Dead Letter Queue (DLQ) for rejected operations, and atomic incremental Pull hydration (`GET /api/sync/pull?since=...`) on app start, tab focus (`visibilitychange`), mobile resume, and manual sync to keep linked devices consistent.
 - **Sessions:** dual-token lifecycle (60 min `access_token` / 30-day `refresh_token`). Concurrent session control based on the active plan.
 - **Limit Management:** blocking excess accounts modal upon plan downgrade. Controlled merge when logging in from a device with pre-existing local data.
 - **Premium Upgrade:** request flow with transfer receipt upload. Waiting panel while verification is pending.

@@ -5,6 +5,7 @@
 
 const ACCESS_TOKEN_KEY = 'auth_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
+const LAST_SYNC_TIME_KEY = 'rastro_last_sync_time'
 
 export const tokenStorage = {
   /**
@@ -32,11 +33,12 @@ export const tokenStorage = {
   },
 
   /**
-   * Clears both access and refresh tokens.
+   * Clears tokens and sync checkpoint.
    */
   clearTokens(): void {
     localStorage.removeItem(ACCESS_TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(LAST_SYNC_TIME_KEY)
   },
 
   /**
@@ -44,5 +46,26 @@ export const tokenStorage = {
    */
   hasAccessToken(): boolean {
     return Boolean(localStorage.getItem(ACCESS_TOKEN_KEY))
+  },
+
+  /**
+   * Retrieves the last sync checkpoint server time.
+   */
+  getLastSyncTime(): string | null {
+    return localStorage.getItem(LAST_SYNC_TIME_KEY)
+  },
+
+  /**
+   * Persists the latest sync checkpoint server time.
+   */
+  setLastSyncTime(serverTime: string): void {
+    localStorage.setItem(LAST_SYNC_TIME_KEY, serverTime)
+  },
+
+  /**
+   * Clears the sync checkpoint server time.
+   */
+  clearLastSyncTime(): void {
+    localStorage.removeItem(LAST_SYNC_TIME_KEY)
   },
 }

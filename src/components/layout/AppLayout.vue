@@ -2,10 +2,25 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProfileStore } from '@/stores/useProfileStore'
+import { useToastStore } from '@/stores/useToastStore'
+import { syncEngine } from '@/sync/SyncEngine'
 
 const route = useRoute()
 const router = useRouter()
 const profileStore = useProfileStore()
+const toast = useToastStore()
+
+async function handleManualSync() {
+  if (syncEngine.isSyncing.value) return
+  toast.info('Sincronizando datos con la nube...')
+  try {
+    await syncEngine.sync()
+    toast.success('Datos actualizados')
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    toast.error(err.message || 'Error al sincronizar datos')
+  }
+}
 
 const collapsed = ref(false)
 
@@ -125,7 +140,22 @@ function navigate(to: string) {
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       <header class="md:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-gray-100 shrink-0">
-        <div class="w-12"></div>
+        <div class="w-12 flex items-center">
+          <button
+            type="button"
+            @click="handleManualSync"
+            class="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+            :disabled="syncEngine.isSyncing.value"
+            title="Sincronizar datos"
+            aria-label="Sincronizar datos"
+          >
+            <Icon
+              icon="lucide:refresh-cw"
+              class="w-4 h-4 transition-transform"
+              :class="{ 'animate-spin text-primary': syncEngine.isSyncing.value }"
+            />
+          </button>
+        </div>
         <img src="/sololetras-blanco.jpg" alt="Rastro" class="h-6 w-auto" />
         <div class="w-12 flex justify-end">
           <span 

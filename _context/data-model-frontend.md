@@ -185,6 +185,19 @@ export interface SyncBatchOperation {
 export interface SyncBatchRequest {
   operations: SyncBatchOperation[];
 }
+
+export interface SyncPullData {
+  server_time: string;
+  accounts: Account[];
+  transactions: Transaction[];
+}
+
+export interface SyncPullResponse {
+  success: boolean;
+  message: string;
+  data: SyncPullData;
+  meta: null;
+}
 ```
 
 ---
