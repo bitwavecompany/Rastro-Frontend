@@ -11,7 +11,18 @@ export class SyncEngine {
   public isSyncing = ref(false)
   private isFrozen = ref(false)
   public lastSyncTime = ref<string | null>(tokenStorage.getLastSyncTime())
-  private autoSyncTimer: ReturnType<typeof setInterval> | null = null
+  private pendingSync: { forceFull: boolean } | null = null
+
+  // Smart Adaptive Polling control fields
+  private lastSyncFinishedAt = 0
+  private lastUserActivityAt = Date.now()
+  private readonly ACTIVE_INTERVAL_MS = 15000 // 15s cuando el usuario está activo
+  private readonly IDLE_INTERVAL_MS = 60000   // 60s tras > 2 minutos sin actividad
+  private readonly IDLE_THRESHOLD_MS = 120000 // 2 minutos
+  private readonly MIN_COOLDOWN_MS = 3000     // 3s de enfriamiento para evitar llamadas duplicadas
+  private autoSyncTimer: ReturnType<typeof setTimeout> | null = null
+  private isAutoSyncRunning = false
+  private currentIntervalMs = 15000
 
   freeze() {
     this.isFrozen.value = true
@@ -45,7 +56,7 @@ export class SyncEngine {
           if (!entry) continue
 
           if (result.status === 'success') {
-            await db.outbox.delete(entry.seq!)
+            await db.outbox.delete(entry.opId)
             if (!['delete', 'hard-delete', 'purge-account'].includes(entry.op)) {
               if (entry.entity === 'accounts') {
                 await db.accounts.update(entry.entityId, { sync_status: 'synced' })
@@ -56,9 +67,14 @@ export class SyncEngine {
           } else if (result.status === 'error') {
             const code = result.code ?? 0
             if ([403, 404, 422].includes(code)) {
-              await db.outbox.delete(entry.seq!)
+              await db.outbox.delete(entry.opId)
               await db.dlq.add({
-                ...entry,
+                opId: entry.opId,
+                entity: entry.entity,
+                entityId: entry.entityId,
+                op: entry.op,
+                payload: entry.payload,
+                createdAt: entry.createdAt,
                 errorCode: code,
                 errorMessage: result.message || 'Unknown error',
                 failedAt: new Date().toISOString(),
@@ -101,7 +117,13 @@ export class SyncEngine {
 
       if (!pullData) return
 
-      const { server_time, accounts, transactions } = pullData
+      const {
+        server_time,
+        accounts,
+        transactions,
+        deleted_account_ids,
+        deleted_transaction_ids,
+      } = pullData
 
       // Identify local entries currently pending in outbox to prevent overwriting unpushed edits
       const outboxEntries = await db.outbox.toArray()
@@ -114,6 +136,27 @@ export class SyncEngine {
 
       let accountsChanged = false
       let transactionsChanged = false
+
+      // Procesar tombstones físicos devueltos por el backend en pulls incrementales
+      if (Array.isArray(deleted_account_ids) && deleted_account_ids.length > 0) {
+        for (const accId of deleted_account_ids) {
+          const idStr = String(accId)
+          if (!pendingAccountIds.has(idStr)) {
+            await db.accounts.delete(idStr)
+            accountsChanged = true
+          }
+        }
+      }
+
+      if (Array.isArray(deleted_transaction_ids) && deleted_transaction_ids.length > 0) {
+        for (const trxId of deleted_transaction_ids) {
+          const idStr = String(trxId)
+          if (!pendingTransactionIds.has(idStr)) {
+            await db.transactions.delete(idStr)
+            transactionsChanged = true
+          }
+        }
+      }
 
       const serverAccountIds = new Set<string>()
       const serverTransactionIds = new Set<string>()
@@ -236,15 +279,27 @@ export class SyncEngine {
    * @param rethrowError If true, throws network or server errors to the caller (useful for manual sync UI feedback).
    */
   async sync(forceFull = false, rethrowError = false): Promise<void> {
-    if (this.isFrozen.value || this.isSyncing.value) return
-    if (!tokenStorage.hasAccessToken()) return
+    if (this.isFrozen.value || !tokenStorage.hasAccessToken()) return
+
+    if (this.isSyncing.value) {
+      this.pendingSync = {
+        forceFull: (this.pendingSync?.forceFull ?? false) || forceFull,
+      }
+      return
+    }
 
     this.isSyncing.value = true
     try {
       await this.push(rethrowError)
       await this.pull(forceFull, rethrowError)
+      this.lastSyncFinishedAt = Date.now()
     } finally {
       this.isSyncing.value = false
+      if (this.pendingSync !== null) {
+        const next = this.pendingSync
+        this.pendingSync = null
+        await this.sync(next.forceFull, false)
+      }
     }
   }
 
@@ -253,18 +308,61 @@ export class SyncEngine {
     this.lastSyncTime.value = null
   }
 
-  startAutoSync(intervalMs = 25000) {
-    if (this.autoSyncTimer) {
-      clearInterval(this.autoSyncTimer)
+  notifyUserActivity(): void {
+    this.lastUserActivityAt = Date.now()
+    if (this.isAutoSyncRunning && this.currentIntervalMs > this.ACTIVE_INTERVAL_MS) {
+      this.scheduleNextPoll(this.ACTIVE_INTERVAL_MS)
     }
-    this.autoSyncTimer = setInterval(() => this.sync(), intervalMs)
   }
 
-  stopAutoSync() {
+  async triggerSmartSync(forceFull = false): Promise<void> {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return
+    }
+    if (!forceFull && Date.now() - this.lastSyncFinishedAt < this.MIN_COOLDOWN_MS) {
+      return
+    }
+    await this.sync(forceFull)
+  }
+
+  startAutoSync(initialDelayMs?: number): void {
+    this.isAutoSyncRunning = true
+    this.scheduleNextPoll(initialDelayMs)
+  }
+
+  stopAutoSync(): void {
+    this.isAutoSyncRunning = false
     if (this.autoSyncTimer) {
-      clearInterval(this.autoSyncTimer)
+      clearTimeout(this.autoSyncTimer)
       this.autoSyncTimer = null
     }
+  }
+
+  private scheduleNextPoll(delayMs?: number): void {
+    if (!this.isAutoSyncRunning) return
+
+    if (this.autoSyncTimer) {
+      clearTimeout(this.autoSyncTimer)
+      this.autoSyncTimer = null
+    }
+
+    const isActive = Date.now() - this.lastUserActivityAt < this.IDLE_THRESHOLD_MS
+    const interval = delayMs ?? (isActive ? this.ACTIVE_INTERVAL_MS : this.IDLE_INTERVAL_MS)
+    this.currentIntervalMs = interval
+
+    this.autoSyncTimer = setTimeout(async () => {
+      if (!this.isAutoSyncRunning) return
+
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        try {
+          await this.sync(false)
+        } catch (err) {
+          console.error('[SyncEngine] Error during auto sync cycle', err)
+        }
+      }
+
+      this.scheduleNextPoll()
+    }, interval)
   }
 }
 

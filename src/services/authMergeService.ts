@@ -200,7 +200,7 @@ export const authMergeService = {
       const outboxEntries = await db.outbox.toArray()
       for (const entry of outboxEntries) {
         if (entry.entity === 'accounts' && entry.entityId === guestDefault.id) {
-          await db.outbox.delete(entry.seq!)
+          await db.outbox.delete(entry.opId)
         }
         const payload = entry.payload as Record<string, unknown> | undefined
         if (entry.entity === 'transactions' && payload?.account_id === guestDefault.id) {

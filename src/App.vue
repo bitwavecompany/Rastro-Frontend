@@ -38,28 +38,38 @@ onMounted(async () => {
   
   isAppReady.value = true
 
-  // Disparar sincronización bidireccional inicial completa con el servidor (reconciliación)
+  // Disparar reconciliación inicial completa con el servidor al iniciar
   syncEngine.sync(true)
 
-  // Iniciar sincronización periódica en segundo plano (cada 20 segundos)
-  syncEngine.startAutoSync(20000)
+  // Iniciar polling adaptativo inteligente
+  syncEngine.startAutoSync()
 
-  // Triggers de sincronización multidispositivo / móvil
-  window.addEventListener('online', () => syncEngine.sync(true))
+  // Triggers de sincronización multidispositivo / móvil protegidos con cooldown
+  window.addEventListener('online', () => syncEngine.triggerSmartSync(true))
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      syncEngine.sync(true)
+      syncEngine.notifyUserActivity()
+      syncEngine.startAutoSync()
+      syncEngine.triggerSmartSync(false)
+    } else {
+      syncEngine.stopAutoSync()
     }
   })
 
   window.addEventListener('focus', () => {
-    syncEngine.sync(true)
+    syncEngine.notifyUserActivity()
+    syncEngine.triggerSmartSync(false)
   })
 
   document.addEventListener('resume', () => {
-    syncEngine.sync(true)
+    syncEngine.notifyUserActivity()
+    syncEngine.triggerSmartSync(false)
   })
+
+  // Listeners pasivos de actividad del usuario para mantener el intervalo activo (15s)
+  window.addEventListener('pointerdown', () => syncEngine.notifyUserActivity(), { passive: true })
+  window.addEventListener('keydown', () => syncEngine.notifyUserActivity(), { passive: true })
 
   // Sincronización multi-pestaña: si otra pestaña cambia de sesión o cierra sesión,
   // sincronizar el estado reactivo para prevenir peticiones con tokens cruzados

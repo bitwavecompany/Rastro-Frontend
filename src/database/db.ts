@@ -5,6 +5,7 @@ import type { Profile } from '@/types/profile'
 import type { OutboxEntry } from '@/sync/types'
 
 export interface DlqEntry extends OutboxEntry {
+  seq?: number
   errorCode: number
   errorMessage: string
   failedAt: string
@@ -14,7 +15,7 @@ export class RastroDatabase extends Dexie {
   accounts!: Table<Account, string>
   transactions!: Table<Transaction, string>
   profile!: Table<Profile, string>
-  outbox!: Table<OutboxEntry, number>
+  outbox!: Table<OutboxEntry, string>
   dlq!: Table<DlqEntry, number>
 
   constructor() {

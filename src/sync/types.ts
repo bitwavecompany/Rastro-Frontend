@@ -10,7 +10,6 @@ export type OutboxOperation =
   | 'relocate'
 
 export interface OutboxEntry {
-  seq?: number
   opId: string
   entity: 'accounts' | 'transactions' | 'profile'
   entityId: string
@@ -85,6 +84,8 @@ export interface SyncPullData {
   server_time: string
   accounts: SyncPullAccountItem[]
   transactions: SyncPullTransactionItem[]
+  deleted_account_ids?: string[]
+  deleted_transaction_ids?: string[]
 }
 
 export interface SyncPullResponse {
