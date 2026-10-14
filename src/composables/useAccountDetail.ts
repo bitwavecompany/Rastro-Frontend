@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { compareTransactionsDesc } from '@/utils/sorting'
 import type { Transaction } from '@/types/transaction'
 
 export type MovementTab = 'all' | 'incomes' | 'expenses'
@@ -48,11 +49,7 @@ export function useAccountDetail(accountId: string) {
   })
 
   const filteredMovements = computed<Movement[]>(() => {
-    const sorted = [...movementsForAccount.value].sort((a, b) => {
-      const dateA = new Date(a.date || a.created_at || 0).getTime()
-      const dateB = new Date(b.date || b.created_at || 0).getTime()
-      return dateB - dateA
-    })
+    const sorted = [...movementsForAccount.value].sort(compareTransactionsDesc)
 
     if (activeTab.value === 'incomes') return sorted.filter(m => m.type === 'income')
     if (activeTab.value === 'expenses') return sorted.filter(m => m.type === 'expense')

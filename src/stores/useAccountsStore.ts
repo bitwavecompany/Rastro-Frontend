@@ -6,6 +6,7 @@ import { enqueueOutbox } from '@/sync/outbox'
 import { toPlainObject } from '@/utils/clone'
 import { useSessionStore } from '@/stores/useSessionStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { compareAccountsDesc } from '@/utils/sorting'
 import type { Account, CreateAccountPayload } from '@/types/account'
 
 function createDefaultCash(): Account {
@@ -30,17 +31,23 @@ export const useAccountsStore = defineStore('accounts', () => {
   const isLoaded = ref(false)
   const session = useSessionStore()
 
-  // Active accounts (deleted_at == null) occupy plan capacity slots
+  // Active accounts (deleted_at == null) ordered strictly descending (newest first)
   const accounts = computed(() =>
-    _accounts.value.filter(a => !a.deleted_at)
+    [..._accounts.value]
+      .filter(a => !a.deleted_at)
+      .sort(compareAccountsDesc)
   )
 
-  // All accounts (active and deactivated)
-  const allAccounts = computed(() => _accounts.value)
+  // All accounts (active and deactivated) ordered strictly descending
+  const allAccounts = computed(() =>
+    [..._accounts.value].sort(compareAccountsDesc)
+  )
 
-  // Deactivated accounts (soft-deleted) release their capacity slot
+  // Deactivated accounts (soft-deleted) ordered strictly descending
   const deactivatedAccounts = computed(() =>
-    _accounts.value.filter(a => Boolean(a.deleted_at))
+    [..._accounts.value]
+      .filter(a => Boolean(a.deleted_at))
+      .sort(compareAccountsDesc)
   )
 
   // Immutable, permanent default cash account (PRD Rule 3.1)
@@ -70,6 +77,7 @@ export const useAccountsStore = defineStore('accounts', () => {
         }
       } else {
         const data = await db.accounts.toArray()
+        data.sort(compareAccountsDesc)
         _accounts.value = data
       }
     } catch (error) {
@@ -96,7 +104,8 @@ export const useAccountsStore = defineStore('accounts', () => {
       sync_status: 'pending_create',
     }
 
-    _accounts.value.push(account)
+    _accounts.value.unshift(account)
+    _accounts.value.sort(compareAccountsDesc)
     await db.accounts.add(toPlainObject(account))
     await enqueueOutbox('accounts', account.id, 'create', toPlainObject(account))
 
@@ -158,6 +167,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
 
     _accounts.value[index] = updatedAccount
+    _accounts.value.sort(compareAccountsDesc)
     await db.accounts.put(toPlainObject(updatedAccount))
     await enqueueOutbox('accounts', id, 'update', toPlainObject(payload))
   }
@@ -220,6 +230,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
 
     _accounts.value[index] = restoredAccount
+    _accounts.value.sort(compareAccountsDesc)
     await db.accounts.put(toPlainObject(restoredAccount))
     // PRD 6.1: No cascade when restoring account (transactions remain deactivated)
     await enqueueOutbox('accounts', id, 'restore', { id })

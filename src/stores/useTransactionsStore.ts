@@ -7,6 +7,7 @@ import { enqueueOutbox } from '@/sync/outbox'
 import { toPlainObject } from '@/utils/clone'
 import { formatDate } from '@/utils/formatters'
 import { useAccountsStore } from '@/stores/useAccountsStore'
+import { compareTransactionsDesc } from '@/utils/sorting'
 import type { Transaction, CreateTransactionPayload } from '@/types/transaction'
 import type { TransactionType } from '@/constants/transactions'
 
@@ -19,16 +20,22 @@ export const useTransactionsStore = defineStore('transactions', () => {
   const _transactions = ref<Transaction[]>([])
   const isLoaded = ref(false)
 
-  // Expose only active transactions (deleted_at == null)
+  // Expose only active transactions (deleted_at == null) ordered strictly descending (newest first)
   const transactions = computed(() =>
-    _transactions.value.filter(t => !t.deleted_at)
+    [..._transactions.value]
+      .filter(t => !t.deleted_at)
+      .sort(compareTransactionsDesc)
   )
 
-  // All transactions (active and deactivated)
-  const allTransactions = computed(() => _transactions.value)
+  // All transactions (active and deactivated) ordered strictly descending
+  const allTransactions = computed(() =>
+    [..._transactions.value].sort(compareTransactionsDesc)
+  )
 
   const deactivatedTransactions = computed(() =>
-    _transactions.value.filter(t => Boolean(t.deleted_at))
+    [..._transactions.value]
+      .filter(t => Boolean(t.deleted_at))
+      .sort(compareTransactionsDesc)
   )
 
   const expenses = computed(() =>
@@ -40,11 +47,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
   )
 
   const allExpenses = computed(() =>
-    _transactions.value.filter(t => t.type === 'expense')
+    allTransactions.value.filter(t => t.type === 'expense')
   )
 
   const allIncomes = computed(() =>
-    _transactions.value.filter(t => t.type === 'income')
+    allTransactions.value.filter(t => t.type === 'income')
   )
 
   function getTransactionById(id: string): Transaction | undefined {
@@ -64,12 +71,9 @@ export const useTransactionsStore = defineStore('transactions', () => {
         }
       }
 
-      // Sort by date descending (fallback to created_at)
-      _transactions.value = data.sort((a, b) => {
-        const dateA = new Date(a.date || a.created_at || 0).getTime()
-        const dateB = new Date(b.date || b.created_at || 0).getTime()
-        return dateB - dateA
-      })
+      // Sort by date DESC -> created_at DESC -> id DESC (canonical order matching backend)
+      data.sort(compareTransactionsDesc)
+      _transactions.value = data
     } catch (error) {
       console.error('Error loading transactions from Dexie', error)
     } finally {
@@ -119,6 +123,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
 
     _transactions.value.unshift(transaction)
+    _transactions.value.sort(compareTransactionsDesc)
     await db.transactions.add(toPlainObject(transaction))
     await enqueueOutbox('transactions', transaction.id, 'create', toPlainObject(transaction))
 
@@ -168,6 +173,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
 
     _transactions.value[index] = updatedTransaction
+    _transactions.value.sort(compareTransactionsDesc)
     await db.transactions.put(toPlainObject(updatedTransaction))
     const outboxPayload = {
       ...payload,
@@ -220,6 +226,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
 
     _transactions.value[index] = restoredTransaction
+    _transactions.value.sort(compareTransactionsDesc)
     await db.transactions.put(toPlainObject(restoredTransaction))
     await enqueueOutbox('transactions', id, 'restore')
   }
@@ -254,12 +261,14 @@ export const useTransactionsStore = defineStore('transactions', () => {
   }
 
   function byAccount(accountId: string, type?: TransactionType, includeDeactivated = false): Transaction[] {
-    return _transactions.value.filter(t => {
-      const matchAccount = t.account_id === accountId
-      const matchType = type ? t.type === type : true
-      const matchActive = includeDeactivated ? true : !t.deleted_at
-      return matchAccount && matchType && matchActive
-    })
+    return _transactions.value
+      .filter(t => {
+        const matchAccount = t.account_id === accountId
+        const matchType = type ? t.type === type : true
+        const matchActive = includeDeactivated ? true : !t.deleted_at
+        return matchAccount && matchType && matchActive
+      })
+      .sort(compareTransactionsDesc)
   }
 
   // PRD 4.6 & Rule 7: Relocate a transaction between accounts

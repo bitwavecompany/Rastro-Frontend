@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import { useAccountsStore } from '@/stores/useAccountsStore'
 import { useTransactionsStore } from '@/stores/useTransactionsStore'
+import { compareTransactionsDesc } from '@/utils/sorting'
 
 export function useDashboard() {
   const accountsStore = useAccountsStore()
@@ -35,11 +36,11 @@ export function useDashboard() {
     currentMonthIncomes.value - currentMonthExpenses.value
   )
 
-  // PRD 5.1: Most recent 8 transactions across all accounts ordered by date descending
+  // PRD 5.1: Most recent 8 transactions across all accounts ordered by date descending (matching backend canonical sort)
   const recentTransactions = computed(() =>
     [...transactionsStore.transactions]
       .filter(t => !t.deleted_at)
-      .sort((a, b) => new Date(b.date || b.created_at || 0).getTime() - new Date(a.date || a.created_at || 0).getTime())
+      .sort(compareTransactionsDesc)
       .slice(0, 8)
   )
 

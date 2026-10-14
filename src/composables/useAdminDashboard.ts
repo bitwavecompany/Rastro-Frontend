@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { adminApi } from '@/api/admin'
 import { useToastStore } from '@/stores/useToastStore'
 import { useProfileStore } from '@/stores/useProfileStore'
+import { compareCreatedAtDesc } from '@/utils/sorting'
 import type { PremiumRequest, Profile } from '@/types/profile'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -75,15 +76,15 @@ export function useAdminDashboard() {
     try {
       isLoadingUsers.value = true
       const { data } = await adminApi.getUsers()
+      let rawUsers: Profile[] = []
       if (Array.isArray(data.data)) {
-        users.value = data.data
+        rawUsers = data.data
       } else if (Array.isArray(data.data?.results)) {
-        users.value = data.data.results
+        rawUsers = data.data.results
       } else if (Array.isArray(data)) {
-        users.value = data
-      } else {
-        users.value = []
+        rawUsers = data
       }
+      users.value = rawUsers.sort(compareCreatedAtDesc)
     } catch (error: unknown) {
       handleApiAuthError(error, 'Error al cargar usuarios')
     } finally {
@@ -95,15 +96,15 @@ export function useAdminDashboard() {
     try {
       isLoadingRequests.value = true
       const { data } = await adminApi.getPremiumRequests()
+      let rawRequests: PremiumRequest[] = []
       if (Array.isArray(data.data)) {
-        premiumRequests.value = data.data
+        rawRequests = data.data
       } else if (Array.isArray(data.data?.results)) {
-        premiumRequests.value = data.data.results
+        rawRequests = data.data.results
       } else if (Array.isArray(data)) {
-        premiumRequests.value = data
-      } else {
-        premiumRequests.value = []
+        rawRequests = data
       }
+      premiumRequests.value = rawRequests.sort(compareCreatedAtDesc)
     } catch (error: unknown) {
       handleApiAuthError(error, 'Error al cargar solicitudes premium')
     } finally {
